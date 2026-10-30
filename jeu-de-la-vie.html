@@ -27,6 +27,7 @@
       --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
       --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+      --chrome: 400px; /* hauteur occupée autour du plateau (titre, compteur, boutons…) */
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -82,11 +83,7 @@
       transition: color .3s;
     }
     header a:hover, header a:focus-visible { color: var(--amber); outline: none; }
-    header h1 {
-      font: inherit;
-      color: var(--ink);
-      white-space: nowrap;
-    }
+    header h1 { font: inherit; color: var(--ink); white-space: nowrap; }
 
     /* ---------- Compteur ---------- */
     .readout {
@@ -116,7 +113,7 @@
 
     /* ---------- Plateau ---------- */
     .board {
-      width: min(100%, 640px, calc(100dvh - 290px));
+      width: min(100%, 640px, calc(100dvh - var(--chrome)));
       min-width: 260px;
       aspect-ratio: 1 / 1;
       position: relative;
@@ -137,7 +134,28 @@
       user-select: none;
       -webkit-user-select: none;
     }
-    body.running canvas { cursor: default; }
+    body.running canvas, body.panmode canvas { cursor: grab; }
+
+    /* ---------- Zoom ---------- */
+    .zoombar {
+      width: 100%;
+      max-width: 640px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 2fr 2fr;
+      gap: 8px;
+    }
+    .zoombar button {
+      height: 46px;
+      padding: 0;
+      font-size: 11px;
+      letter-spacing: .18em;
+      color: var(--ink);
+      background: rgba(13, 14, 17, .55);
+      border: 1px solid rgba(235, 232, 225, .28);
+    }
+    .zoombar button.sym { font-size: 22px; letter-spacing: 0; line-height: 1; }
+    .zoombar button:hover:not(:disabled), .zoombar button:focus-visible { border-color: var(--amber); color: var(--amber); outline: none; }
+    .zoombar button[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); background: rgba(246, 181, 100, .1); }
 
     .status {
       min-height: 1.4em;
@@ -146,6 +164,16 @@
       font-style: italic;
       font-size: 15px;
       color: var(--muted);
+    }
+    .tip {
+      max-width: 34em;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      line-height: 1.7;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: rgba(139, 139, 147, .7);
     }
 
     /* ---------- Boutons ---------- */
@@ -167,7 +195,7 @@
       letter-spacing: .32em;
       text-transform: uppercase;
       padding-left: .32em;
-      transition: border-color .3s, color .3s, opacity .3s, transform .15s;
+      transition: border-color .3s, color .3s, opacity .3s, transform .15s, background .3s;
     }
     button:active:not(:disabled) { transform: scale(.985); }
     button:disabled { opacity: .35; cursor: not-allowed; }
@@ -191,6 +219,11 @@
     }
     #clear:hover:not(:disabled), #clear:focus-visible { border-color: var(--amber); color: var(--amber); outline: none; }
     #go:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+    @media (max-height: 760px) {
+      :root { --chrome: 350px; }
+      .tip { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -216,7 +249,15 @@
       <canvas id="board" aria-label="Grille de 64 par 64 carrés. Touchez ou glissez pour noircir des carrés." role="img"></canvas>
     </div>
 
+    <div class="zoombar" role="group" aria-label="Zoom et déplacement">
+      <button id="zoomOut" type="button" class="sym" aria-label="Dézoomer">−</button>
+      <button id="zoomIn" type="button" class="sym" aria-label="Zoomer">+</button>
+      <button id="fit" type="button">Tout voir</button>
+      <button id="pan" type="button" aria-pressed="false">Déplacer</button>
+    </div>
+
     <p class="status" id="status" role="status">Touchez ou glissez pour noircir des carrés, puis GO.</p>
+    <p class="tip">Zoom : pincez, molette ou + / −<br>Déplacement : deux doigts, ou le bouton « Déplacer »</p>
 
     <div class="controls">
       <button id="go" type="button" disabled>GO</button>
@@ -229,8 +270,10 @@
       'use strict';
 
       var N = 64;            // grille de 64 x 64
-      var TICK = 1000;       // un round par seconde
+      var TICK = 500;        // un round toutes les 0,5 seconde
+      var MIN_Z = 1, MAX_Z = 8, STEP_Z = 1.6;
       var PAPER = '#ebe8e1', INK = '#0d0e11';
+      var MSG_DRAW = 'Touchez ou glissez pour noircir des carrés, puis GO.';
 
       var grid = new Uint8Array(N * N);
       var next = new Uint8Array(N * N);
@@ -243,46 +286,95 @@
       var elStatus = document.getElementById('status');
       var btnGo = document.getElementById('go');
       var btnClear = document.getElementById('clear');
-      var cell = 10;
+      var btnIn = document.getElementById('zoomIn');
+      var btnOut = document.getElementById('zoomOut');
+      var btnFit = document.getElementById('fit');
+      var btnPan = document.getElementById('pan');
+
+      // ---------- Vue : zoom et décalage ----------
+      // z = facteur de zoom (1 = grille entière visible).
+      // x, y = décalage en px CSS du coin visible, dans le plan zoomé.
+      var view = { z: 1, x: 0, y: 0 };
+      var viewCss = 320, dpr = 1;
+      var mode = 'paint';    // 'paint' : un doigt dessine / 'pan' : un doigt déplace
+
+      function cellCss() { return viewCss / N * view.z; }
+
+      function clampView() {
+        var max = viewCss * (view.z - 1);
+        view.x = Math.min(max, Math.max(0, view.x));
+        view.y = Math.min(max, Math.max(0, view.y));
+      }
+
+      // zoom en gardant fixe le point (fx, fy) du canvas (px CSS)
+      function zoomAt(newZ, fx, fy) {
+        newZ = Math.min(MAX_Z, Math.max(MIN_Z, newZ));
+        var k = newZ / view.z;
+        view.x = (view.x + fx) * k - fx;
+        view.y = (view.y + fy) * k - fy;
+        view.z = newZ;
+        clampView();
+        draw();
+        updateUI();
+      }
 
       // ---------- Dessin ----------
       function resize() {
-        var dpr = window.devicePixelRatio || 1;
-        var css = canvas.getBoundingClientRect().width || 320;
-        cell = Math.max(4, Math.floor(css * dpr / N));
-        canvas.width = canvas.height = cell * N;
+        dpr = window.devicePixelRatio || 1;
+        viewCss = canvas.getBoundingClientRect().width || 320;
+        canvas.width = canvas.height = Math.max(1, Math.round(viewCss * dpr));
+        clampView();
         draw();
       }
 
       function draw() {
-        var W = cell * N, x, y, i, p;
+        var W = canvas.width;
+        var c = cellCss() * dpr, ox = view.x * dpr, oy = view.y * dpr;
+        var x, y, i, p, px, py, pw, ph;
+        var x0 = Math.max(0, Math.floor(ox / c)), x1 = Math.min(N - 1, Math.floor((ox + W - 1) / c));
+        var y0 = Math.max(0, Math.floor(oy / c)), y1 = Math.min(N - 1, Math.floor((oy + W - 1) / c));
+
         ctx.fillStyle = PAPER;
         ctx.fillRect(0, 0, W, W);
 
         ctx.fillStyle = INK;
-        for (y = 0; y < N; y++) {
-          for (x = 0; x < N; x++) {
-            if (grid[y * N + x]) ctx.fillRect(x * cell, y * cell, cell, cell);
+        for (y = y0; y <= y1; y++) {
+          py = Math.round(y * c - oy);
+          ph = Math.round((y + 1) * c - oy) - py;
+          for (x = x0; x <= x1; x++) {
+            if (grid[y * N + x]) {
+              px = Math.round(x * c - ox);
+              pw = Math.round((x + 1) * c - ox) - px;
+              ctx.fillRect(px, py, pw, ph);
+            }
           }
         }
 
-        // quadrillage au crayon : lignes fines, blocs de 8 un peu plus marqués
+        // quadrillage au crayon : lignes fines, blocs de 8 plus marqués
         ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(13,14,17,.15)';
+        ctx.strokeStyle = cellCss() >= 16 ? 'rgba(13,14,17,.26)' : 'rgba(13,14,17,.15)';
         ctx.beginPath();
-        for (i = 1; i < N; i++) {
+        for (i = x0; i <= x1 + 1; i++) {
           if (i % 8 === 0) continue;
-          p = i * cell + .5;
+          p = Math.round(i * c - ox) + .5;
           ctx.moveTo(p, 0); ctx.lineTo(p, W);
+        }
+        for (i = y0; i <= y1 + 1; i++) {
+          if (i % 8 === 0) continue;
+          p = Math.round(i * c - oy) + .5;
           ctx.moveTo(0, p); ctx.lineTo(W, p);
         }
         ctx.stroke();
 
+        ctx.lineWidth = Math.max(1, Math.round(dpr * .75));
         ctx.strokeStyle = 'rgba(13,14,17,.38)';
         ctx.beginPath();
-        for (i = 8; i < N; i += 8) {
-          p = i * cell + .5;
+        for (i = Math.max(8, Math.ceil(x0 / 8) * 8); i <= x1 + 1 && i < N; i += 8) {
+          p = Math.round(i * c - ox) + .5;
           ctx.moveTo(p, 0); ctx.lineTo(p, W);
+        }
+        for (i = Math.max(8, Math.ceil(y0 / 8) * 8); i <= y1 + 1 && i < N; i += 8) {
+          p = Math.round(i * c - oy) + .5;
           ctx.moveTo(0, p); ctx.lineTo(W, p);
         }
         ctx.stroke();
@@ -303,7 +395,17 @@
         btnGo.classList.toggle('is-pause', running);
         btnGo.disabled = !running && alive === 0;
         btnClear.disabled = running;
+        btnIn.disabled = view.z >= MAX_Z - 0.001;
+        btnOut.disabled = view.z <= MIN_Z + 0.001;
+        btnFit.disabled = view.z <= MIN_Z + 0.001;
         document.body.classList.toggle('running', running);
+        document.body.classList.toggle('panmode', mode === 'pan');
+      }
+
+      function refresh() {
+        alive = countAlive();
+        draw();
+        updateUI();
       }
 
       // ---------- Règles du jeu de la vie ----------
@@ -344,7 +446,8 @@
       function start() {
         if (running || alive === 0) return;
         running = true;
-        say('En cours : un round par seconde.');
+        pending = null; painting = false;
+        say('En cours : un round toutes les 0,5 seconde. Un doigt déplace la grille.');
         timer = setInterval(step, TICK);
         updateUI();
       }
@@ -363,17 +466,28 @@
         round = 0;
         alive = 0;
         draw();
-        say('Touchez ou glissez pour noircir des carrés, puis GO.');
+        say(MSG_DRAW);
         updateUI();
       }
 
-      // ---------- Saisie : toucher ou glisser pour noircir / effacer ----------
+      // ---------- Saisie ----------
+      // Un doigt : dessine (toucher ou glisser) ou déplace la grille (mode « Déplacer », ou pendant la simulation).
+      // Deux doigts : pincement pour zoomer, glissement pour déplacer.
+      var pointers = new Map();     // pointerId -> {x, y} (coordonnées écran)
+      var pending = null;           // appui en attente : un tap, ou le début d'un tracé
       var painting = false, paintVal = 1, lastX = 0, lastY = 0;
+      var panLast = null;           // dernier point d'un déplacement à un doigt
+      var gesture = null;           // état du geste à deux doigts
+
+      function canvasPoint(e) {
+        var r = canvas.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top };
+      }
 
       function cellAt(e) {
-        var r = canvas.getBoundingClientRect();
-        var x = Math.floor((e.clientX - r.left) / r.width * N);
-        var y = Math.floor((e.clientY - r.top) / r.height * N);
+        var p = canvasPoint(e), c = cellCss();
+        var x = Math.floor((p.x + view.x) / c);
+        var y = Math.floor((p.y + view.y) / c);
         return { x: Math.min(N - 1, Math.max(0, x)), y: Math.min(N - 1, Math.max(0, y)) };
       }
 
@@ -391,41 +505,120 @@
         }
       }
 
-      canvas.addEventListener('pointerdown', function (e) {
-        if (running) return;
-        e.preventDefault();
-        var c = cellAt(e);
-        if (alive === 0) round = 0;               // nouveau départ : on repart de zéro
-        paintVal = grid[c.y * N + c.x] ? 0 : 1;   // le premier carré touché décide : noircir ou effacer
+      function beginStroke(cx, cy) {
+        if (alive === 0) round = 0;     // nouveau départ : on repart de zéro
         painting = true;
-        lastX = c.x; lastY = c.y;
+        lastX = cx; lastY = cy;
+        paintLine(cx, cy, cx, cy);
+        refresh();
+        say(MSG_DRAW);
+      }
+
+      function pinchState() {
+        var pts = Array.from(pointers.values());
+        var a = pts[0], b = pts[1];
+        return {
+          d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+          mx: (a.x + b.x) / 2,
+          my: (a.y + b.y) / 2
+        };
+      }
+
+      canvas.addEventListener('pointerdown', function (e) {
+        e.preventDefault();
         try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
-        paintLine(c.x, c.y, c.x, c.y);
-        alive = countAlive();
-        draw();
-        updateUI();
-        if (alive > 0) say('Touchez ou glissez pour noircir des carrés, puis GO.');
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        if (pointers.size === 2) {            // deuxième doigt : on annule tout tracé et on passe en zoom
+          pending = null; painting = false; panLast = null;
+          gesture = pinchState();
+          return;
+        }
+        if (pointers.size > 2) return;
+
+        if (running || mode === 'pan') {      // un doigt déplace la grille
+          panLast = { x: e.clientX, y: e.clientY };
+          return;
+        }
+        var c = cellAt(e);
+        paintVal = grid[c.y * N + c.x] ? 0 : 1;   // le premier carré touché décide : noircir ou effacer
+        pending = { id: e.pointerId, x: e.clientX, y: e.clientY, cx: c.x, cy: c.y };
       });
 
       canvas.addEventListener('pointermove', function (e) {
-        if (!painting) return;
-        var c = cellAt(e);
-        if (c.x === lastX && c.y === lastY) return;
-        paintLine(lastX, lastY, c.x, c.y);
-        lastX = c.x; lastY = c.y;
-        alive = countAlive();
-        draw();
-        updateUI();
+        var p = pointers.get(e.pointerId);
+        if (!p) return;
+        p.x = e.clientX; p.y = e.clientY;
+
+        if (pointers.size === 2 && gesture) {
+          var g = pinchState(), r = canvas.getBoundingClientRect();
+          view.x -= g.mx - gesture.mx;
+          view.y -= g.my - gesture.my;
+          zoomAt(view.z * g.d / gesture.d, g.mx - r.left, g.my - r.top);
+          gesture = g;
+          return;
+        }
+        if (pointers.size !== 1) return;
+
+        if (panLast) {
+          view.x -= e.clientX - panLast.x;
+          view.y -= e.clientY - panLast.y;
+          panLast = { x: e.clientX, y: e.clientY };
+          clampView();
+          draw();
+          return;
+        }
+
+        if (pending && pending.id === e.pointerId) {
+          if (Math.hypot(e.clientX - pending.x, e.clientY - pending.y) < 6) return;  // simple tremblement du doigt
+          beginStroke(pending.cx, pending.cy);
+          pending = null;
+        }
+        if (painting) {
+          var c = cellAt(e);
+          if (c.x === lastX && c.y === lastY) return;
+          paintLine(lastX, lastY, c.x, c.y);
+          lastX = c.x; lastY = c.y;
+          refresh();
+        }
       });
 
-      function endPaint() { painting = false; }
-      canvas.addEventListener('pointerup', endPaint);
-      canvas.addEventListener('pointercancel', endPaint);
+      function release(e) {
+        pointers.delete(e.pointerId);
+        if (pending && pending.id === e.pointerId) {
+          if (e.type === 'pointerup') beginStroke(pending.cx, pending.cy);   // simple tap
+          pending = null;
+        }
+        if (pointers.size < 2) gesture = null;
+        if (pointers.size === 0) { painting = false; panLast = null; }
+      }
+      canvas.addEventListener('pointerup', release);
+      canvas.addEventListener('pointercancel', release);
 
+      // molette / pavé tactile : zoom autour du curseur
+      canvas.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        var dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+        var r = canvas.getBoundingClientRect();
+        zoomAt(view.z * Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.0018)), e.clientX - r.left, e.clientY - r.top);
+      }, { passive: false });
+
+      // ---------- Boutons ----------
+      btnIn.addEventListener('click', function () { zoomAt(view.z * STEP_Z, viewCss / 2, viewCss / 2); });
+      btnOut.addEventListener('click', function () { zoomAt(view.z / STEP_Z, viewCss / 2, viewCss / 2); });
+      btnFit.addEventListener('click', function () { view.z = 1; view.x = 0; view.y = 0; draw(); updateUI(); });
+      btnPan.addEventListener('click', function () {
+        mode = mode === 'pan' ? 'paint' : 'pan';
+        btnPan.setAttribute('aria-pressed', mode === 'pan' ? 'true' : 'false');
+        pending = null; painting = false;
+        if (!running) say(mode === 'pan' ? 'Mode déplacement : un doigt fait glisser la grille.' : MSG_DRAW);
+        updateUI();
+      });
       btnGo.addEventListener('click', function () { running ? stop() : start(); });
       btnClear.addEventListener('click', clearAll);
 
-      window.addEventListener('resize', resize);
+      if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
+      else window.addEventListener('resize', resize);
       resize();
       updateUI();
 
