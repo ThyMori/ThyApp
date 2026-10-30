@@ -1,0 +1,14 @@
+firebase-bundle.js
+------------------
+SDK Firebase pour navigateur (version 13.1.0, licence Apache-2.0), limité aux modules dont ThyApp
+a besoin : app, auth et firestore. Il est copié ici pour que l'application se charge et fonctionne
+sans dépendre d'un serveur tiers, y compris hors connexion une fois mise en cache.
+
+Il n'est chargé que si firebase-config.js contient une configuration (mode en ligne).
+
+Pour le régénérer (depuis un dossier de travail, hors du dépôt) :
+
+  npm install firebase@13.1.0 esbuild
+  cp <dépôt>/vendor/firebase-entry.js entry.js
+  npx esbuild entry.js --bundle --minify --format=iife --platform=browser --target=es2020 \
+      --legal-comments=none --outfile=<dépôt>/vendor/firebase-bundle.js

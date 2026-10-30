@@ -1,0 +1,73 @@
+rules_version = '2';
+
+// Règles de sécurité Firestore de ThyApp.
+// À coller dans la console Firebase : Firestore Database > Règles > Publier.
+//
+// Principe : on ne peut rien lire ni écrire sans être connecté avec une adresse e-mail Google vérifiée
+// ET inscrit dans la base « users » par un administrateur. L'inscription précise les parties de
+// l'application ouvertes à cette personne (spectacles, …) ou lui donne tous les droits (admin).
+//
+// users/<adresse e-mail en minuscules> = { admin: true|false, sections: ['spectacles', …] }
+//
+// Si une nouvelle partie de l'application ajoute sa propre base, il faut ajouter ici un bloc « match »
+// qui l'associe à une partie (sinon l'accès est refusé à tout le monde).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email != null;
+    }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function profilePath() { return /databases/$(database)/documents/users/$(myEmail()); }
+    function hasProfile() { return signedIn() && exists(profilePath()); }
+    function profile() { return get(profilePath()).data; }
+
+    function isAdmin() { return hasProfile() && profile().get('admin', false) == true; }
+    function can(section) {
+      return hasProfile() && (isAdmin() || section in profile().get('sections', []));
+    }
+
+    function validNom(d) {
+      return d.nom is string && d.nom.size() > 0 && d.nom.size() <= 200;
+    }
+    function validSpectacle(d) {
+      return d.titre is string && d.titre.size() > 0 && d.titre.size() <= 200
+        && (!('productionId' in d) || d.productionId is string)
+        && (!('mesId' in d) || d.mesId is string);
+    }
+
+    // Droits d'accès : chacun peut lire sa propre fiche (pour savoir ce qu'il a le droit d'ouvrir),
+    // seuls les administrateurs lisent et modifient les autres. Un administrateur ne peut ni se
+    // retirer ses droits ni supprimer sa propre fiche (pour ne pas s'enfermer dehors).
+    match /users/{email} {
+      allow read: if signedIn() && (myEmail() == email || isAdmin());
+      allow create, update: if isAdmin()
+        && request.resource.data.admin is bool
+        && request.resource.data.sections is list
+        && (myEmail() != email || request.resource.data.admin == true);
+      allow delete: if isAdmin() && myEmail() != email;
+    }
+
+    // Partie « Spectacles » : spectacles, et les productions et personnes qui leur sont liées.
+    match /spectacles/{id} {
+      allow read, delete: if can('spectacles');
+      allow create, update: if can('spectacles') && validSpectacle(request.resource.data);
+    }
+    match /productions/{id} {
+      allow read, delete: if can('spectacles');
+      allow create, update: if can('spectacles') && validNom(request.resource.data);
+    }
+    match /personnes/{id} {
+      allow read, delete: if can('spectacles');
+      allow create, update: if can('spectacles') && validNom(request.resource.data);
+    }
+
+    // Tout le reste est interdit.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

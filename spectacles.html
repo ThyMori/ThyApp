@@ -189,6 +189,9 @@
     .empty svg { width: 30px; height: 30px; color: var(--amber); }
     .none { font-family: var(--serif); font-style: italic; color: var(--muted); }
 
+    .content { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    body.locked .content, body.locked .gear { display: none; }
+
     /* ---------- Formulaire ---------- */
     dialog {
       margin: max(12px, env(safe-area-inset-top)) auto auto;
@@ -267,6 +270,9 @@
       </button>
     </header>
 
+    <div id="gate" hidden></div>
+
+    <div class="content" id="content">
     <p class="count" id="count" aria-live="polite"></p>
 
     <div class="searchwrap" id="searchWrap" hidden>
@@ -279,6 +285,7 @@
     <div class="empty" id="empty" hidden>
       <h2>Aucun spectacle</h2>
       <p>Votre liste est vide. Touchez la roue crantée, en haut à droite, pour ajouter un premier spectacle.</p>
+    </div>
     </div>
   </div>
 
@@ -313,6 +320,7 @@
     </form>
   </dialog>
 
+  <script src="firebase-config.js"></script>
   <script src="db.js"></script>
   <script>
     (function () {
@@ -353,10 +361,13 @@
       // ---------- Liste ----------
       function render() {
         var prod = {}, pers = {};
-        DB.productions.all().forEach(function (r) { prod[r.id] = r.nom; });
-        DB.personnes.all().forEach(function (r) { pers[r.id] = r.nom; });
+        DB.productions.list().forEach(function (r) { prod[r.id] = r.nom; });
+        DB.personnes.list().forEach(function (r) { pers[r.id] = r.nom; });
 
-        var all = DB.spectacles.all().map(function (s) {
+        // tant que la base n'a pas répondu, on n'affiche ni « liste vide » ni compteur
+        var loaded = DB.spectacles.loaded() && DB.productions.loaded() && DB.personnes.loaded();
+
+        var all = DB.spectacles.list().map(function (s) {
           return { s: s, prod: prod[s.productionId] || '', mes: pers[s.mesId] || '' };
         });
         all.sort(function (a, b) { return collator.compare(a.s.titre, b.s.titre); });
@@ -365,7 +376,7 @@
         var shown = q ? all.filter(function (x) { return norm([x.s.titre, x.prod, x.mes].join(' ')).indexOf(q) >= 0; }) : all;
 
         elSearchWrap.hidden = all.length < 5;
-        elEmpty.hidden = all.length > 0;
+        elEmpty.hidden = !(loaded && all.length === 0);
         elNone.hidden = !(all.length > 0 && shown.length === 0);
         elCount.hidden = all.length === 0;
         elCount.textContent = (q && all.length >= 5 ? shown.length + ' / ' + all.length : all.length) +
@@ -401,7 +412,7 @@
       function fillSelect(sel, coll, selectedId, newLabel) {
         sel.textContent = '';
         addOpt(sel, '', '— Aucune —');
-        DB[coll].all().sort(byName).forEach(function (r) { addOpt(sel, r.id, r.nom); });
+        DB[coll].list().slice().sort(byName).forEach(function (r) { addOpt(sel, r.id, r.nom); });
         addOpt(sel, NEW, newLabel);
         sel.value = selectedId || '';
         if (sel.value !== (selectedId || '')) sel.value = '';
@@ -443,7 +454,7 @@
 
       // Retrouve un enregistrement du même nom (sans tenir compte des accents ni de la casse), sinon le crée.
       function findOrCreate(coll, name) {
-        var n = norm(name), all = DB[coll].all();
+        var n = norm(name), all = DB[coll].list();
         for (var i = 0; i < all.length; i++) if (norm(all[i].nom) === n) return all[i].id;
         return DB[coll].add({ nom: name }).id;
       }
@@ -463,19 +474,14 @@
         if (fProd.value === NEW && !fNewProd.value.trim()) { showError('Donnez un nom à la nouvelle production.'); fNewProd.focus(); return; }
         if (fMes.value === NEW && !fNewMes.value.trim()) { showError('Donnez un nom à la nouvelle personne.'); fNewMes.focus(); return; }
 
-        try {
-          var data = {
-            titre: titre,
-            productionId: resolveLink('productions', fProd, fNewProd),
-            mesId: resolveLink('personnes', fMes, fNewMes)
-          };
-          if (editingId) DB.spectacles.update(editingId, data); else DB.spectacles.add(data);
-        } catch (err) {
-          showError("Impossible d'enregistrer : le stockage du navigateur est indisponible ou plein.");
-          return;
-        }
+        // L'affichage est mis à jour tout de suite ; si la base refuse l'écriture, un message s'affiche en bas de page.
+        var data = {
+          titre: titre,
+          productionId: resolveLink('productions', fProd, fNewProd),
+          mesId: resolveLink('personnes', fMes, fNewMes)
+        };
+        if (editingId) DB.spectacles.update(editingId, data); else DB.spectacles.add(data);
         dlg.close();
-        render();
       });
 
       // suppression en deux temps : un premier toucher arme le bouton, le second confirme
@@ -488,12 +494,8 @@
           deleteTimer = setTimeout(disarm, 4000);
           return;
         }
-        try { DB.spectacles.remove(editingId); } catch (err) {
-          showError("Impossible de supprimer : le stockage du navigateur est indisponible.");
-          return;
-        }
+        DB.spectacles.remove(editingId);
         dlg.close();
-        render();
       });
 
       $('cancel').addEventListener('click', function () { dlg.close(); });
@@ -502,8 +504,10 @@
 
       $('gear').addEventListener('click', function () { openForm(null); });
       elSearch.addEventListener('input', render);
-      window.addEventListener('storage', render);   // modification faite dans un autre onglet
 
+      DB.showErrors();
+      DB.gate({ section: 'spectacles', mount: $('gate') });
+      [DB.spectacles, DB.productions, DB.personnes].forEach(function (c) { c.subscribe(render); });
       render();
 
       if ('serviceWorker' in navigator) {

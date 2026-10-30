@@ -33,6 +33,7 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
 
     html, body { height: 100%; }
 
@@ -240,6 +241,33 @@
       text-align: left;
       transition: border-color .3s, color .3s, background .3s;
     }
+    .menu.live { animation: none; opacity: 1; }
+    body.locked .menu { display: none; }
+    main .thy-gate { margin: 0; }
+    .account {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 4px 14px;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .16em;
+      color: var(--muted);
+    }
+    .account button {
+      appearance: none;
+      cursor: pointer;
+      padding: 10px 0;
+      font: inherit;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--ink);
+      background: none;
+      border: 0;
+      border-bottom: 1px solid rgba(235, 232, 225, .3);
+    }
+    .account button:hover, .account button:focus-visible { color: var(--amber); border-color: var(--amber); outline: none; }
     .menu-item .n { color: var(--amber); letter-spacing: .1em; }
     .menu-item .t { flex: 1; }
     .menu-item .ar { transition: transform .3s; }
@@ -357,14 +385,24 @@
       <p class="role">Création &amp; Régie Lumière</p>
       <p class="lede">Le plateau est encore dans le noir. Les premières lumières se lèvent bientôt.</p>
 
-      <nav class="menu" aria-label="Menu principal">
-        <a class="menu-item" href="jeu-de-la-vie.html">
+      <div id="gate" hidden></div>
+
+      <nav class="menu" id="menu" aria-label="Menu principal">
+        <a class="menu-item" href="jeu-de-la-vie.html" data-section="jeu-de-la-vie">
           <span class="n">01</span><span class="t">Jeu de la vie</span><span class="ar" aria-hidden="true">→</span>
         </a>
-        <a class="menu-item" href="spectacles.html">
+        <a class="menu-item" href="spectacles.html" data-section="spectacles">
           <span class="n">02</span><span class="t">Spectacles</span><span class="ar" aria-hidden="true">→</span>
         </a>
+        <a class="menu-item" href="acces.html" data-admin hidden>
+          <span class="n">03</span><span class="t">Accès</span><span class="ar" aria-hidden="true">→</span>
+        </a>
       </nav>
+
+      <p class="account" id="account" hidden>
+        <span id="accountEmail"></span>
+        <button id="signout" type="button">Se déconnecter</button>
+      </p>
 
       <div class="notes" aria-hidden="true">
         <span>Lighting plot<i>·</i>Color gels</span>
@@ -380,6 +418,8 @@
 
   <p class="hint" aria-hidden="true">Touchez l’écran · go lumière</p>
 
+  <script src="firebase-config.js"></script>
+  <script src="db.js"></script>
   <script>
     (function () {
       var root = document.documentElement;
@@ -420,6 +460,40 @@
         body.classList.add('go');
         clearTimeout(timer);
         timer = setTimeout(function () { body.classList.remove('go'); }, 1300);
+      });
+
+      // Menu : chaque entrée n'apparaît que si le compte connecté a accès à cette partie.
+      var DB = window.ThyDB;
+      var menu = document.getElementById('menu');
+      var items = Array.prototype.slice.call(menu.querySelectorAll('.menu-item'));
+      var elAccount = document.getElementById('account');
+      DB.gate({ mount: document.getElementById('gate') });
+      document.getElementById('signout').addEventListener('click', function () { DB.signOut(); });
+
+      DB.onState(function (s) {
+        var visible = 0;
+        items.forEach(function (a) {
+          var section = a.getAttribute('data-section');
+          var ok = a.hasAttribute('data-admin') ? (DB.mode === 'cloud' && DB.isAdmin()) : (!section || DB.can(section));
+          a.hidden = !ok;
+          if (ok) visible++;
+        });
+        // si le menu apparaît longtemps après le chargement (après une connexion), pas d'animation différée
+        if (visible && performance.now() > 3500) menu.classList.add('live');
+
+        var who = DB.mode === 'cloud' && s.status === 'ready' && s.user;
+        elAccount.hidden = !who;
+        if (who) {
+          document.getElementById('accountEmail').textContent = s.user.email;
+          if (!visible) {
+            // compte reconnu mais sans aucune partie ouverte : on le dit au lieu d'afficher un menu vide
+            document.getElementById('gate').hidden = false;
+            document.getElementById('gate').textContent = '';
+            var p = document.createElement('p');
+            p.textContent = "Votre compte est reconnu, mais aucune partie de l'application ne vous est encore ouverte. Demandez à l'administrateur de vous en ouvrir une.";
+            document.getElementById('gate').appendChild(p);
+          }
+        }
       });
 
       // PWA : service worker (nécessite HTTPS, fourni par GitHub Pages).

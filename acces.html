@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Accès — Thierry Morin</title>
+  <meta name="description" content="Gestion des personnes autorisées et des parties de l'application qu'elles peuvent ouvrir.">
+  <meta name="theme-color" content="#0d0e11">
+  <meta name="color-scheme" content="dark">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ThyApp">
+
+  <style>
+    :root {
+      --bg: #0d0e11;
+      --ink: #ebe8e1;
+      --muted: #8b8b93;
+      --lilac: #b7a4ea;
+      --amber: #f6b564;
+      --coral: #ee7f73;
+      --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+      --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
+    html, body { min-height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .wash { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+    .blob { position: absolute; filter: blur(80px); mix-blend-mode: screen; opacity: .2; }
+    .blob.lilac { width: 60vmax; height: 50vmax; right: -22vmax; top: -14vmax;
+      background: radial-gradient(closest-side, var(--lilac), transparent 72%); }
+    .blob.amber { width: 46vmax; height: 40vmax; right: -14vmax; top: 40vh;
+      background: radial-gradient(closest-side, var(--amber), transparent 72%); }
+    .blob.coral { width: 38vmax; height: 34vmax; left: -16vmax; bottom: -16vmax;
+      background: radial-gradient(closest-side, var(--coral), transparent 72%); }
+
+    .page {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: max(18px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    }
+
+    header {
+      width: 100%;
+      max-width: 640px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: .26em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    header a { justify-self: start; color: var(--ink); text-decoration: none; padding: 12px 12px 12px 0; transition: color .3s; }
+    header a:hover, header a:focus-visible { color: var(--amber); outline: none; }
+    header h1 { font: inherit; color: var(--ink); white-space: nowrap; }
+
+    .add {
+      justify-self: end;
+      width: 46px; height: 46px;
+      display: grid; place-items: center;
+      margin-right: -8px;
+      color: var(--ink);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: color .3s, border-color .3s;
+    }
+    .add svg { width: 24px; height: 24px; }
+    .add:hover, .add:focus-visible { color: var(--amber); border-color: rgba(246, 181, 100, .5); outline: none; }
+
+    .content { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    body.locked .content, body.locked .add { display: none; }
+
+    .intro { width: 100%; max-width: 640px; font-family: var(--serif); font-style: italic; font-size: 16px; line-height: 1.5; color: var(--muted); }
+    .count { width: 100%; max-width: 640px; font-family: var(--mono); font-size: 10px; letter-spacing: .26em; text-transform: uppercase; color: var(--muted); }
+
+    input[type="email"] {
+      width: 100%;
+      font-family: var(--sans);
+      font-size: 16px;               /* 16 px : évite le zoom automatique sur iPhone */
+      color: var(--ink);
+      background: rgba(235, 232, 225, .05);
+      border: 1px solid rgba(235, 232, 225, .28);
+      border-radius: 2px;
+      padding: 14px;
+      min-height: 50px;
+      transition: border-color .3s, background .3s;
+    }
+    input[type="email"]:focus { outline: none; border-color: var(--amber); background: rgba(246, 181, 100, .06); }
+    input[readonly] { color: var(--muted); }
+
+    .list { width: 100%; max-width: 640px; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .item {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+      padding: 16px 18px 15px;
+      color: var(--ink);
+      font: inherit;
+      background: rgba(13, 14, 17, .55);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(235, 232, 225, .2);
+      border-radius: 2px;
+      cursor: pointer;
+      transition: border-color .3s, background .3s;
+    }
+    .item:hover, .item:focus-visible { border-color: var(--amber); background: rgba(13, 14, 17, .75); outline: none; }
+    .item .t { font-family: var(--serif); font-size: 21px; line-height: 1.25; overflow-wrap: anywhere; }
+    .item .t em { font-size: 14px; color: var(--muted); }
+    .item .m { display: flex; align-items: baseline; gap: 12px; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+    .item .m .k { flex: none; width: 86px; white-space: nowrap; font-family: var(--mono); font-size: 9.5px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+    .item .m.none-v { color: var(--muted); font-style: italic; }
+    .item .m.admin-v { color: var(--amber); }
+
+    dialog {
+      margin: max(12px, env(safe-area-inset-top)) auto auto;
+      width: min(calc(100% - 24px), 560px);
+      max-height: calc(100dvh - 24px);
+      overflow: auto;
+      padding: 0;
+      color: var(--ink);
+      background: #14151a;
+      border: 1px solid rgba(235, 232, 225, .22);
+      border-radius: 4px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .7);
+    }
+    dialog::backdrop { background: rgba(5, 5, 7, .72); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+    @media (min-width: 700px) { dialog { margin-top: 12vh; } }
+
+    .sheet { padding: 22px 20px 20px; display: flex; flex-direction: column; gap: 18px; }
+    .sheet h2 { font-family: var(--serif); font-weight: 400; font-size: 28px; }
+    .field { display: flex; flex-direction: column; gap: 10px; border: 0; }
+    .field > label, .field > legend {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .26em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0;
+      margin-bottom: 2px;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-height: 48px;
+      padding: 0 14px;
+      font-size: 16px;
+      cursor: pointer;
+      background: rgba(235, 232, 225, .04);
+      border: 1px solid rgba(235, 232, 225, .2);
+      border-radius: 2px;
+    }
+    .check input { width: 22px; height: 22px; accent-color: var(--amber); flex: none; }
+    .check.off { opacity: .5; cursor: default; }
+    .hint { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--muted); }
+    .err { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--coral); }
+
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 2px; }
+    .actions .full { grid-column: 1 / -1; }
+    button.btn {
+      appearance: none;
+      cursor: pointer;
+      height: 52px;
+      border-radius: 2px;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .26em;
+      text-transform: uppercase;
+      padding: 0 0 0 .26em;
+      color: var(--ink);
+      background: rgba(13, 14, 17, .55);
+      border: 1px solid rgba(235, 232, 225, .28);
+      transition: border-color .3s, color .3s, background .3s, transform .15s;
+    }
+    button.btn:active { transform: scale(.985); }
+    button.btn:hover, button.btn:focus-visible { border-color: var(--amber); color: var(--amber); outline: none; }
+    button.primary { border: 0; color: var(--bg); font-weight: 700; background: linear-gradient(100deg, var(--lilac), var(--amber) 55%, var(--coral)); }
+    button.primary:hover, button.primary:focus-visible { color: var(--bg); box-shadow: 0 0 0 2px var(--ink); }
+    button.danger { color: var(--coral); border-color: rgba(238, 127, 115, .45); }
+    button.danger:hover, button.danger:focus-visible { border-color: var(--coral); color: var(--coral); }
+    button.danger.armed { background: rgba(238, 127, 115, .16); border-color: var(--coral); }
+  </style>
+</head>
+<body>
+  <div class="wash" aria-hidden="true">
+    <div class="blob lilac"></div>
+    <div class="blob amber"></div>
+    <div class="blob coral"></div>
+  </div>
+
+  <div class="page">
+    <header>
+      <a href="./" aria-label="Retour au menu">← Menu</a>
+      <h1>Accès</h1>
+      <button id="add" class="add" type="button" aria-label="Autoriser une personne" title="Autoriser une personne">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </header>
+
+    <div id="gate" hidden></div>
+
+    <div class="content" id="content">
+      <p class="intro">Les personnes autorisées à se connecter, et les parties de l’application qu’elles peuvent ouvrir. Une personne absente de cette liste est refusée.</p>
+      <p class="count" id="count" aria-live="polite"></p>
+      <ul class="list" id="list"></ul>
+    </div>
+  </div>
+
+  <dialog id="dlg" aria-labelledby="formTitle">
+    <form id="form" class="sheet" novalidate>
+      <h2 id="formTitle">Autoriser une personne</h2>
+
+      <div class="field">
+        <label for="email">Adresse e-mail Google</label>
+        <input id="email" type="email" maxlength="200" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="prenom.nom@gmail.com">
+      </div>
+
+      <div class="field">
+        <label class="check" id="adminRow"><input type="checkbox" id="isAdmin"> Administrateur : accès à tout, et gère les accès</label>
+      </div>
+
+      <fieldset class="field" id="sectionsBox">
+        <legend>Parties accessibles</legend>
+      </fieldset>
+
+      <p class="hint" id="hint" hidden></p>
+      <p class="err" id="err" role="alert" hidden></p>
+
+      <div class="actions">
+        <button type="button" class="btn" id="cancel">Annuler</button>
+        <button type="submit" class="btn primary" id="save">Enregistrer</button>
+        <button type="button" class="btn danger full" id="delete" hidden>Retirer l’accès</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="firebase-config.js"></script>
+  <script src="db.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var DB = window.ThyDB, U = DB.users;
+      var $ = function (id) { return document.getElementById(id); };
+      var collator = new Intl.Collator('fr', { sensitivity: 'base' });
+
+      var elList = $('list'), elCount = $('count');
+      var dlg = $('dlg'), form = $('form');
+      var fEmail = $('email'), fAdmin = $('isAdmin'), elErr = $('err'), elHint = $('hint'), btnDelete = $('delete');
+      var editingEmail = null, deleteTimer = null, sectionBoxes = {};
+
+      if (typeof dlg.showModal !== 'function') {
+        dlg.showModal = function () { this.setAttribute('open', ''); };
+        dlg.close = function () { this.removeAttribute('open'); };
+      }
+
+      var labelOf = {};
+      DB.SECTIONS.forEach(function (s) { labelOf[s.id] = s.label; });
+
+      function me() { return DB.state.user ? DB.state.user.email : ''; }
+
+      function el(tag, cls, text) {
+        var n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text != null) n.textContent = text;     // textContent : jamais de HTML venant des données
+        return n;
+      }
+
+      // ---------- Liste ----------
+      function render() {
+        var list = U.list().slice().sort(function (a, b) { return collator.compare(a.id, b.id); });
+        elCount.hidden = !U.loaded();
+        elCount.textContent = list.length + ' personne' + (list.length > 1 ? 's' : '');
+
+        elList.textContent = '';
+        list.forEach(function (u) {
+          var li = el('li'), b = el('button', 'item');
+          b.type = 'button';
+          var t = el('span', 't', u.id);
+          if (u.id === me()) t.appendChild(el('em', null, '  (vous)'));
+          b.appendChild(t);
+
+          var role = el('span', 'm' + (u.admin ? ' admin-v' : ''));
+          role.appendChild(el('span', 'k', 'Rôle'));
+          role.appendChild(el('span', 'v', u.admin ? 'Administrateur' : 'Membre'));
+          b.appendChild(role);
+
+          var parts = u.admin ? 'Toutes' : (u.sections || []).map(function (s) { return labelOf[s] || s; }).join(', ');
+          var sec = el('span', 'm' + (parts ? '' : ' none-v'));
+          sec.appendChild(el('span', 'k', 'Parties'));
+          sec.appendChild(el('span', 'v', parts || 'aucune'));
+          b.appendChild(sec);
+
+          b.addEventListener('click', function () { openForm(u.id); });
+          li.appendChild(b);
+          elList.appendChild(li);
+        });
+      }
+
+      // ---------- Formulaire ----------
+      function showError(msg) { elErr.textContent = msg; elErr.hidden = !msg; }
+
+      function disarm() {
+        clearTimeout(deleteTimer);
+        btnDelete.classList.remove('armed');
+        btnDelete.textContent = 'Retirer l’accès';
+        btnDelete.dataset.armed = '';
+      }
+
+      function syncAdminState() {
+        Object.keys(sectionBoxes).forEach(function (id) {
+          var cb = sectionBoxes[id];
+          cb.disabled = fAdmin.checked;
+          if (fAdmin.checked) cb.checked = true;
+          cb.parentNode.classList.toggle('off', fAdmin.checked);
+        });
+      }
+
+      function buildSections() {
+        var box = $('sectionsBox');
+        Array.prototype.slice.call(box.querySelectorAll('label')).forEach(function (n) { n.remove(); });
+        sectionBoxes = {};
+        DB.SECTIONS.forEach(function (s) {
+          var row = el('label', 'check'), cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.value = s.id;
+          row.appendChild(cb); row.appendChild(document.createTextNode(s.label));
+          box.appendChild(row);
+          sectionBoxes[s.id] = cb;
+        });
+      }
+
+      function openForm(email) {
+        var u = email ? U.get(email) : null;
+        editingEmail = u ? u.id : null;
+        var self = !!u && u.id === me();
+
+        $('formTitle').textContent = u ? "Modifier l'accès" : 'Autoriser une personne';
+        buildSections();
+        fEmail.value = u ? u.id : '';
+        fEmail.readOnly = !!u;
+        fAdmin.checked = !!(u && u.admin);
+        fAdmin.disabled = self;                 // on ne peut pas se retirer ses propres droits : risque de se bloquer
+        Object.keys(sectionBoxes).forEach(function (id) { sectionBoxes[id].checked = !!(u && (u.sections || []).indexOf(id) >= 0); });
+        syncAdminState();
+
+        btnDelete.hidden = !u || self;
+        elHint.hidden = !self;
+        elHint.textContent = self ? "C'est votre compte : vous ne pouvez ni retirer vos droits d'administrateur ni supprimer votre propre accès." : '';
+        disarm();
+        showError('');
+        dlg.showModal();
+        if (!u) fEmail.focus();
+      }
+
+      fAdmin.addEventListener('change', syncAdminState);
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var email = fEmail.value.trim().toLowerCase();
+        if (!/^[^\s@\/]+@[^\s@\/]+\.[^\s@\/]+$/.test(email)) { showError("Cette adresse e-mail n'est pas valide."); fEmail.focus(); return; }
+        if (!editingEmail && U.get(email)) { showError("Cette adresse a déjà un accès : touchez-la dans la liste pour la modifier."); return; }
+
+        var admin = fAdmin.checked;
+        var sections = admin ? [] : Object.keys(sectionBoxes).filter(function (id) { return sectionBoxes[id].checked; });
+        U.set(email, { admin: admin, sections: sections });
+        dlg.close();
+      });
+
+      // retrait de l'accès en deux temps : un premier toucher arme le bouton, le second confirme
+      btnDelete.addEventListener('click', function () {
+        if (!editingEmail || editingEmail === me()) return;
+        if (!btnDelete.dataset.armed) {
+          btnDelete.dataset.armed = '1';
+          btnDelete.classList.add('armed');
+          btnDelete.textContent = 'Confirmer le retrait';
+          deleteTimer = setTimeout(disarm, 4000);
+          return;
+        }
+        U.remove(editingEmail);
+        dlg.close();
+      });
+
+      $('cancel').addEventListener('click', function () { dlg.close(); });
+      dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+      dlg.addEventListener('close', function () { disarm(); showError(''); });
+      $('add').addEventListener('click', function () { openForm(null); });
+
+      DB.showErrors();
+      DB.gate({ admin: true, cloudOnly: true, mount: $('gate') });
+      U.subscribe(render);
+      render();
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').catch(function () {});
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
