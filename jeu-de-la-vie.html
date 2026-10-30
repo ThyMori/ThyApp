@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Jeu de la vie — Thierry Morin</title>
+  <meta name="description" content="Jeu de la vie de Conway : dessine un état de départ et regarde-le évoluer.">
+  <meta name="theme-color" content="#0d0e11">
+  <meta name="color-scheme" content="dark">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ThyApp">
+
+  <style>
+    :root {
+      --bg: #0d0e11;
+      --ink: #ebe8e1;
+      --muted: #8b8b93;
+      --paper: #ebe8e1;
+      --lilac: #b7a4ea;
+      --amber: #f6b564;
+      --coral: #ee7f73;
+      --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+      --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Lavis très discret en fond */
+    .wash { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+    .blob { position: absolute; filter: blur(80px); mix-blend-mode: screen; opacity: .22; }
+    .blob.lilac { width: 60vmax; height: 50vmax; right: -22vmax; top: -14vmax;
+      background: radial-gradient(closest-side, var(--lilac), transparent 72%); }
+    .blob.amber { width: 46vmax; height: 40vmax; right: -14vmax; top: 34vh;
+      background: radial-gradient(closest-side, var(--amber), transparent 72%); }
+    .blob.coral { width: 38vmax; height: 34vmax; left: -16vmax; bottom: -16vmax;
+      background: radial-gradient(closest-side, var(--coral), transparent 72%); }
+
+    .page {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: max(18px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    }
+
+    /* ---------- En-tête ---------- */
+    header {
+      width: 100%;
+      max-width: 640px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: .26em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    header a {
+      justify-self: start;
+      color: var(--ink);
+      text-decoration: none;
+      padding: 12px 12px 12px 0;
+      transition: color .3s;
+    }
+    header a:hover, header a:focus-visible { color: var(--amber); outline: none; }
+    header h1 {
+      font: inherit;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+
+    /* ---------- Compteur ---------- */
+    .readout {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: .26em;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .readout .num {
+      display: block;
+      margin-top: 2px;
+      font-family: var(--serif);
+      font-size: clamp(40px, 11vw, 58px);
+      line-height: 1;
+      letter-spacing: 0;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+    .readout .pop { text-align: right; }
+    .readout .pop .num { font-size: clamp(22px, 6vw, 30px); color: var(--muted); }
+
+    /* ---------- Plateau ---------- */
+    .board {
+      width: min(100%, 640px, calc(100dvh - 290px));
+      min-width: 260px;
+      aspect-ratio: 1 / 1;
+      position: relative;
+      border-radius: 2px;
+      box-shadow: 0 0 0 1px rgba(235, 232, 225, .25), 0 18px 60px -12px rgba(0, 0, 0, .7), 0 0 80px -20px rgba(246, 181, 100, .25);
+      transition: box-shadow .6s ease;
+    }
+    body.running .board {
+      box-shadow: 0 0 0 1px rgba(246, 181, 100, .6), 0 18px 60px -12px rgba(0, 0, 0, .7), 0 0 90px -10px rgba(246, 181, 100, .38);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: 2px;
+      touch-action: none;
+      cursor: crosshair;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body.running canvas { cursor: default; }
+
+    .status {
+      min-height: 1.4em;
+      text-align: center;
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 15px;
+      color: var(--muted);
+    }
+
+    /* ---------- Boutons ---------- */
+    .controls {
+      width: 100%;
+      max-width: 640px;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 10px;
+      margin-top: auto;
+    }
+    button {
+      appearance: none;
+      cursor: pointer;
+      height: 54px;
+      border-radius: 2px;
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: .32em;
+      text-transform: uppercase;
+      padding-left: .32em;
+      transition: border-color .3s, color .3s, opacity .3s, transform .15s;
+    }
+    button:active:not(:disabled) { transform: scale(.985); }
+    button:disabled { opacity: .35; cursor: not-allowed; }
+
+    #go {
+      border: 0;
+      color: var(--bg);
+      font-weight: 700;
+      background: linear-gradient(100deg, var(--lilac), var(--amber) 55%, var(--coral));
+    }
+    #go.is-pause {
+      color: var(--ink);
+      font-weight: 400;
+      background: transparent;
+      border: 1px solid var(--amber);
+    }
+    #clear {
+      color: var(--ink);
+      background: rgba(13, 14, 17, .55);
+      border: 1px solid rgba(235, 232, 225, .28);
+    }
+    #clear:hover:not(:disabled), #clear:focus-visible { border-color: var(--amber); color: var(--amber); outline: none; }
+    #go:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <div class="wash" aria-hidden="true">
+    <div class="blob lilac"></div>
+    <div class="blob amber"></div>
+    <div class="blob coral"></div>
+  </div>
+
+  <div class="page">
+    <header>
+      <a href="./" aria-label="Retour au menu">← Menu</a>
+      <h1>Jeu de la vie</h1>
+      <span></span>
+    </header>
+
+    <div class="readout" aria-live="off">
+      <div>Round<span class="num" id="round">0</span></div>
+      <div class="pop">Vivants<span class="num" id="pop">0</span></div>
+    </div>
+
+    <div class="board">
+      <canvas id="board" aria-label="Grille de 64 par 64 carrés. Touchez ou glissez pour noircir des carrés." role="img"></canvas>
+    </div>
+
+    <p class="status" id="status" role="status">Touchez ou glissez pour noircir des carrés, puis GO.</p>
+
+    <div class="controls">
+      <button id="go" type="button" disabled>GO</button>
+      <button id="clear" type="button">Effacer</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var N = 64;            // grille de 64 x 64
+      var TICK = 1000;       // un round par seconde
+      var PAPER = '#ebe8e1', INK = '#0d0e11';
+
+      var grid = new Uint8Array(N * N);
+      var next = new Uint8Array(N * N);
+      var round = 0, alive = 0, running = false, timer = null;
+
+      var canvas = document.getElementById('board');
+      var ctx = canvas.getContext('2d');
+      var elRound = document.getElementById('round');
+      var elPop = document.getElementById('pop');
+      var elStatus = document.getElementById('status');
+      var btnGo = document.getElementById('go');
+      var btnClear = document.getElementById('clear');
+      var cell = 10;
+
+      // ---------- Dessin ----------
+      function resize() {
+        var dpr = window.devicePixelRatio || 1;
+        var css = canvas.getBoundingClientRect().width || 320;
+        cell = Math.max(4, Math.floor(css * dpr / N));
+        canvas.width = canvas.height = cell * N;
+        draw();
+      }
+
+      function draw() {
+        var W = cell * N, x, y, i, p;
+        ctx.fillStyle = PAPER;
+        ctx.fillRect(0, 0, W, W);
+
+        ctx.fillStyle = INK;
+        for (y = 0; y < N; y++) {
+          for (x = 0; x < N; x++) {
+            if (grid[y * N + x]) ctx.fillRect(x * cell, y * cell, cell, cell);
+          }
+        }
+
+        // quadrillage au crayon : lignes fines, blocs de 8 un peu plus marqués
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(13,14,17,.15)';
+        ctx.beginPath();
+        for (i = 1; i < N; i++) {
+          if (i % 8 === 0) continue;
+          p = i * cell + .5;
+          ctx.moveTo(p, 0); ctx.lineTo(p, W);
+          ctx.moveTo(0, p); ctx.lineTo(W, p);
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(13,14,17,.38)';
+        ctx.beginPath();
+        for (i = 8; i < N; i += 8) {
+          p = i * cell + .5;
+          ctx.moveTo(p, 0); ctx.lineTo(p, W);
+          ctx.moveTo(0, p); ctx.lineTo(W, p);
+        }
+        ctx.stroke();
+      }
+
+      function countAlive() {
+        var n = 0;
+        for (var i = 0; i < grid.length; i++) n += grid[i];
+        return n;
+      }
+
+      function say(text) { elStatus.textContent = text; }
+
+      function updateUI() {
+        elRound.textContent = round;
+        elPop.textContent = alive;
+        btnGo.textContent = running ? 'Pause' : 'GO';
+        btnGo.classList.toggle('is-pause', running);
+        btnGo.disabled = !running && alive === 0;
+        btnClear.disabled = running;
+        document.body.classList.toggle('running', running);
+      }
+
+      // ---------- Règles du jeu de la vie ----------
+      function step() {
+        var x, y, dx, dy, nx, ny, n, i, v;
+        for (y = 0; y < N; y++) {
+          for (x = 0; x < N; x++) {
+            n = 0;
+            for (dy = -1; dy <= 1; dy++) {
+              ny = y + dy;
+              if (ny < 0 || ny >= N) continue;
+              for (dx = -1; dx <= 1; dx++) {
+                if (!dx && !dy) continue;
+                nx = x + dx;
+                if (nx < 0 || nx >= N) continue;
+                n += grid[ny * N + nx];
+              }
+            }
+            i = y * N + x;
+            v = grid[i];
+            // vivant : reste vivant avec 2 ou 3 voisins (sinon meurt : <2 ou >3)
+            // mort : devient vivant avec exactement 3 voisins
+            next[i] = v ? ((n === 2 || n === 3) ? 1 : 0) : (n === 3 ? 1 : 0);
+          }
+        }
+        var t = grid; grid = next; next = t;
+        round++;
+        alive = countAlive();
+        draw();
+
+        if (alive === 0) {
+          stop();
+          say('Plus aucun carré vivant. Effacez, puis dessinez un nouveau départ.');
+        }
+        updateUI();
+      }
+
+      function start() {
+        if (running || alive === 0) return;
+        running = true;
+        say('En cours : un round par seconde.');
+        timer = setInterval(step, TICK);
+        updateUI();
+      }
+
+      function stop() {
+        running = false;
+        clearInterval(timer);
+        timer = null;
+        if (alive > 0) say('En pause. Vous pouvez modifier la grille ou reprendre avec GO.');
+        updateUI();
+      }
+
+      function clearAll() {
+        if (running) return;
+        grid.fill(0);
+        round = 0;
+        alive = 0;
+        draw();
+        say('Touchez ou glissez pour noircir des carrés, puis GO.');
+        updateUI();
+      }
+
+      // ---------- Saisie : toucher ou glisser pour noircir / effacer ----------
+      var painting = false, paintVal = 1, lastX = 0, lastY = 0;
+
+      function cellAt(e) {
+        var r = canvas.getBoundingClientRect();
+        var x = Math.floor((e.clientX - r.left) / r.width * N);
+        var y = Math.floor((e.clientY - r.top) / r.height * N);
+        return { x: Math.min(N - 1, Math.max(0, x)), y: Math.min(N - 1, Math.max(0, y)) };
+      }
+
+      // trace une ligne de cellules (Bresenham) pour ne laisser aucun trou en glissant
+      function paintLine(x0, y0, x1, y1) {
+        var dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+        var sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+        var err = dx + dy, e2;
+        for (;;) {
+          grid[y0 * N + x0] = paintVal;
+          if (x0 === x1 && y0 === y1) break;
+          e2 = 2 * err;
+          if (e2 >= dy) { err += dy; x0 += sx; }
+          if (e2 <= dx) { err += dx; y0 += sy; }
+        }
+      }
+
+      canvas.addEventListener('pointerdown', function (e) {
+        if (running) return;
+        e.preventDefault();
+        var c = cellAt(e);
+        if (alive === 0) round = 0;               // nouveau départ : on repart de zéro
+        paintVal = grid[c.y * N + c.x] ? 0 : 1;   // le premier carré touché décide : noircir ou effacer
+        painting = true;
+        lastX = c.x; lastY = c.y;
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+        paintLine(c.x, c.y, c.x, c.y);
+        alive = countAlive();
+        draw();
+        updateUI();
+        if (alive > 0) say('Touchez ou glissez pour noircir des carrés, puis GO.');
+      });
+
+      canvas.addEventListener('pointermove', function (e) {
+        if (!painting) return;
+        var c = cellAt(e);
+        if (c.x === lastX && c.y === lastY) return;
+        paintLine(lastX, lastY, c.x, c.y);
+        lastX = c.x; lastY = c.y;
+        alive = countAlive();
+        draw();
+        updateUI();
+      });
+
+      function endPaint() { painting = false; }
+      canvas.addEventListener('pointerup', endPaint);
+      canvas.addEventListener('pointercancel', endPaint);
+
+      btnGo.addEventListener('click', function () { running ? stop() : start(); });
+      btnClear.addEventListener('click', clearAll);
+
+      window.addEventListener('resize', resize);
+      resize();
+      updateUI();
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').catch(function () {});
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

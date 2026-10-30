@@ -2,11 +2,12 @@
 // Stratégie : réseau d'abord (les mises à jour du site apparaissent tout de suite),
 // cache en secours (l'app s'ouvre aussi hors connexion).
 // Pense à changer VERSION à chaque déploiement important pour renouveler le cache.
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'thyapp-' + VERSION;
 const SHELL = [
   './',
   './index.html',
+  './jeu-de-la-vie.html',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',

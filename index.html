@@ -41,7 +41,7 @@
       color: var(--ink);
       font-family: var(--sans);
       -webkit-font-smoothing: antialiased;
-      overflow: hidden;
+      overflow-x: hidden;
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
@@ -211,6 +211,41 @@
       animation: rise 1.4s ease 2s forwards;
     }
 
+    /* ---------- Menu principal ---------- */
+    .menu {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: min(100%, 340px);
+      margin-top: 6px;
+      opacity: 0;
+      animation: rise 1.4s ease 2.4s forwards;
+    }
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 17px 18px;
+      border: 1px solid rgba(235, 232, 225, .26);
+      border-radius: 2px;
+      background: rgba(13, 14, 17, .55);
+      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(6px);
+      color: var(--ink);
+      text-decoration: none;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .26em;
+      text-transform: uppercase;
+      text-align: left;
+      transition: border-color .3s, color .3s, background .3s;
+    }
+    .menu-item .n { color: var(--amber); letter-spacing: .1em; }
+    .menu-item .t { flex: 1; }
+    .menu-item .ar { transition: transform .3s; }
+    .menu-item:hover, .menu-item:focus-visible { border-color: var(--amber); color: var(--amber); outline: none; background: rgba(13, 14, 17, .75); }
+    .menu-item:hover .ar, .menu-item:focus-visible .ar { transform: translateX(5px); }
+
     .notes {
       display: flex;
       flex-direction: column;
@@ -222,7 +257,7 @@
       text-transform: uppercase;
       color: rgba(139, 139, 147, .8);
       opacity: 0;
-      animation: rise 1.4s ease 2.4s forwards;
+      animation: rise 1.4s ease 2.8s forwards;
     }
     .notes i { font-style: normal; margin: 0 1.1em; color: rgba(139, 139, 147, .5); }
 
@@ -273,7 +308,12 @@
     @media (prefers-reduced-motion: reduce) {
       .blob, .dot { animation: none; }
       .mark .draw { animation: none; stroke-dashoffset: 0; }
-      h1, .role, .lede, .notes, .hint { animation: none; opacity: 1; transform: none; }
+      h1, .role, .lede, .menu, .notes, .hint { animation: none; opacity: 1; transform: none; }
+    }
+
+    /* écrans courts : on libère la place du petit texte d'aide */
+    @media (max-height: 760px) {
+      .hint { display: none; }
     }
   </style>
 </head>
@@ -316,6 +356,13 @@
       <h1>Bientôt <em>ici</em></h1>
       <p class="role">Création &amp; Régie Lumière</p>
       <p class="lede">Le plateau est encore dans le noir. Les premières lumières se lèvent bientôt.</p>
+
+      <nav class="menu" aria-label="Menu principal">
+        <a class="menu-item" href="jeu-de-la-vie.html">
+          <span class="n">01</span><span class="t">Jeu de la vie</span><span class="ar" aria-hidden="true">→</span>
+        </a>
+      </nav>
+
       <div class="notes" aria-hidden="true">
         <span>Lighting plot<i>·</i>Color gels</span>
         <span>Volumetric forms<i>·</i>Atmospheric wash</span>
