@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Thierry Morin — Bientôt ici</title>
+  <meta name="description" content="Thierry Morin, création et régie lumière. Bientôt ici.">
+  <meta name="theme-color" content="#0d0e11">
+  <meta name="color-scheme" content="dark">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ThyApp">
+
+  <style>
+    :root {
+      --bg: #0d0e11;
+      --ink: #ebe8e1;
+      --muted: #8b8b93;
+      --line: rgba(235, 232, 225, .085);
+      --pencil: rgba(235, 232, 225, .55);
+      --lilac: #b7a4ea;
+      --amber: #f6b564;
+      --coral: #ee7f73;
+      --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+      --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+      --x: 50%;
+      --y: 42%;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .stage {
+      position: relative;
+      height: 100%;
+      min-height: 100dvh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: max(22px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+      isolation: isolate;
+    }
+
+    /* ---------- Fond : croquis de plateau en perspective ---------- */
+    .blueprint {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -3;
+      opacity: .9;
+    }
+    .blueprint * {
+      stroke: var(--line);
+      stroke-width: 1;
+      fill: none;
+      vector-effect: non-scaling-stroke;
+    }
+    .blueprint .strong { stroke: rgba(235, 232, 225, .15); }
+
+    /* ---------- Lavis (aquarelle) ---------- */
+    .wash {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .blob {
+      position: absolute;
+      filter: blur(70px);
+      mix-blend-mode: screen;
+      opacity: .46;
+      transition: opacity .9s ease;
+      will-change: transform;
+    }
+    .blob.lilac {
+      width: 62vmax; height: 52vmax;
+      right: -18vmax; top: -12vmax;
+      background: radial-gradient(closest-side, var(--lilac), transparent 72%);
+      border-radius: 58% 42% 55% 45% / 48% 56% 44% 52%;
+      animation: drift1 26s ease-in-out infinite alternate;
+    }
+    .blob.amber {
+      width: 48vmax; height: 42vmax;
+      right: -6vmax; top: 22vh;
+      background: radial-gradient(closest-side, var(--amber), transparent 72%);
+      border-radius: 46% 54% 40% 60% / 55% 45% 55% 45%;
+      animation: drift2 31s ease-in-out infinite alternate;
+    }
+    .blob.coral {
+      width: 40vmax; height: 36vmax;
+      right: 6vmax; bottom: -14vmax;
+      background: radial-gradient(closest-side, var(--coral), transparent 72%);
+      border-radius: 52% 48% 60% 40% / 45% 58% 42% 55%;
+      animation: drift3 23s ease-in-out infinite alternate;
+    }
+    body.go .blob { opacity: .8; }
+
+    @keyframes drift1 { to { transform: translate3d(-6vmax, 5vmax, 0) rotate(14deg) scale(1.06); } }
+    @keyframes drift2 { to { transform: translate3d(-9vmax, -4vmax, 0) rotate(-12deg) scale(1.1); } }
+    @keyframes drift3 { to { transform: translate3d(-5vmax, -7vmax, 0) rotate(18deg) scale(.94); } }
+
+    /* ---------- Poursuite : le projecteur suit le doigt / la souris ---------- */
+    .spot {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(circle 34vmax at var(--x) var(--y), rgba(255, 244, 224, .085), transparent 70%),
+        radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0, 0, 0, .55) 100%);
+    }
+
+    /* ---------- Haut de page ---------- */
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: .28em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .top .cue { display: inline-flex; align-items: center; gap: .9em; }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 12px 2px rgba(246, 181, 100, .55);
+      animation: standby 2.6s ease-in-out infinite;
+    }
+    @keyframes standby { 50% { opacity: .25; box-shadow: 0 0 4px 0 rgba(246, 181, 100, .2); } }
+
+    /* ---------- Centre ---------- */
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: clamp(14px, 3.2vh, 28px);
+      padding: 4vh 0;
+    }
+
+    .mark { width: clamp(120px, 26vmin, 190px); height: auto; color: var(--ink); overflow: visible; }
+    .mark path { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+    .mark .a { stroke-width: 1.6; opacity: .95; }
+    .mark .b { stroke-width: 1; opacity: .35; transform: translate(1.2px, 1.4px); }
+    .mark .draw {
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      animation: draw 2.4s cubic-bezier(.6, .1, .2, 1) .25s forwards;
+    }
+    .mark .b.draw { animation-delay: .5s; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+
+    h1 {
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: clamp(40px, 11vw, 92px);
+      line-height: 1;
+      letter-spacing: -.01em;
+      opacity: 0;
+      transform: translateY(10px);
+      animation: rise 1.4s ease 1.2s forwards;
+    }
+    h1 em {
+      font-style: italic;
+      background: linear-gradient(100deg, var(--lilac), var(--amber) 55%, var(--coral));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      padding-right: .06em;
+    }
+
+    .role {
+      font-family: var(--mono);
+      font-size: clamp(11px, 2.9vw, 13px);
+      letter-spacing: .32em;
+      text-transform: uppercase;
+      color: var(--ink);
+      opacity: 0;
+      animation: rise 1.4s ease 1.6s forwards;
+    }
+
+    .lede {
+      max-width: 27em;
+      text-wrap: balance;
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: clamp(16px, 4.2vw, 19px);
+      line-height: 1.55;
+      color: var(--muted);
+      opacity: 0;
+      animation: rise 1.4s ease 2s forwards;
+    }
+
+    .notes {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: rgba(139, 139, 147, .8);
+      opacity: 0;
+      animation: rise 1.4s ease 2.4s forwards;
+    }
+    .notes i { font-style: normal; margin: 0 1.1em; color: rgba(139, 139, 147, .5); }
+
+    @keyframes rise { to { opacity: 1; transform: none; } }
+
+    /* ---------- Pied de page ---------- */
+    footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    footer a {
+      color: var(--ink);
+      text-decoration: none;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(235, 232, 225, .3);
+      transition: border-color .3s, color .3s;
+    }
+    footer a:hover, footer a:focus-visible { border-color: var(--amber); color: var(--amber); outline: none; }
+
+    .hint {
+      position: fixed;
+      left: 0; right: 0;
+      bottom: calc(max(22px, env(safe-area-inset-bottom)) + 52px);
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      letter-spacing: .28em;
+      text-transform: uppercase;
+      color: rgba(139, 139, 147, .55);
+      pointer-events: none;
+      opacity: 0;
+      animation: rise 1.4s ease 3.2s forwards;
+    }
+
+    @media (max-width: 520px) {
+      footer { flex-direction: column; align-items: center; text-align: center; gap: 2px; }
+      .top .where { display: none; }
+      .top { justify-content: center; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .blob, .dot { animation: none; }
+      .mark .draw { animation: none; stroke-dashoffset: 0; }
+      h1, .role, .lede, .notes, .hint { animation: none; opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Croquis de plateau en perspective -->
+  <svg class="blueprint" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <!-- cadre central -->
+    <rect class="strong" x="30" y="20" width="40" height="40"/>
+    <rect x="35" y="25" width="30" height="30"/>
+    <!-- fuyantes du « plateau » -->
+    <path class="strong" d="M0 0 L30 20 M100 0 L70 20 M0 100 L30 60 M100 100 L70 60"/>
+    <path d="M0 24 L30 30 M0 50 L30 40 M0 76 L30 50 M100 24 L70 30 M100 50 L70 40 M100 76 L70 50"/>
+    <path d="M30 20 L35 25 M70 20 L65 25 M30 60 L35 55 M70 60 L65 55"/>
+    <!-- sol -->
+    <path d="M30 60 L70 60 M26 66 L74 66 M20 74 L80 74 M10 85 L90 85 M0 99 L100 99"/>
+    <path d="M40 60 L33 100 M50 60 L50 100 M60 60 L67 100 M35 60 L18 100 M65 60 L82 100"/>
+  </svg>
+
+  <div class="wash" aria-hidden="true">
+    <div class="blob lilac"></div>
+    <div class="blob amber"></div>
+    <div class="blob coral"></div>
+  </div>
+  <div class="spot" aria-hidden="true"></div>
+
+  <div class="stage">
+    <header class="top">
+      <span class="cue"><i class="dot" aria-hidden="true"></i>Standby</span>
+      <span class="where">Paris · Tournées</span>
+    </header>
+
+    <main>
+      <svg class="mark" viewBox="0 0 220 100" role="img" aria-label="Monogramme T–M">
+        <g>
+          <path class="b draw" pathLength="1" d="M10 20 H70 M40 20 V80 M88 50 H112 M130 80 V20 L160 62 L190 20 V80"/>
+          <path class="a draw" pathLength="1" d="M10 20 H70 M40 20 V80 M88 50 H112 M130 80 V20 L160 62 L190 20 V80"/>
+        </g>
+      </svg>
+
+      <h1>Bientôt <em>ici</em></h1>
+      <p class="role">Création &amp; Régie Lumière</p>
+      <p class="lede">Le plateau est encore dans le noir. Les premières lumières se lèvent bientôt.</p>
+      <div class="notes" aria-hidden="true">
+        <span>Lighting plot<i>·</i>Color gels</span>
+        <span>Volumetric forms<i>·</i>Atmospheric wash</span>
+      </div>
+    </main>
+
+    <footer>
+      <a href="https://www.thierry-morin.com" rel="noopener">thierry-morin.com</a>
+      <span>© 2026 Thierry Morin</span>
+    </footer>
+  </div>
+
+  <p class="hint" aria-hidden="true">Touchez l’écran · go lumière</p>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var body = document.body;
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // La poursuite suit le pointeur (souris ou doigt).
+      function move(e) {
+        var t = e.touches ? e.touches[0] : e;
+        root.style.setProperty('--x', t.clientX + 'px');
+        root.style.setProperty('--y', t.clientY + 'px');
+      }
+      window.addEventListener('pointermove', move, { passive: true });
+      window.addEventListener('touchmove', move, { passive: true });
+
+      // Au repos, la poursuite se balade doucement.
+      if (!reduce) {
+        var last = 0, idle = true, t0 = performance.now();
+        ['pointermove', 'touchmove'].forEach(function (n) {
+          window.addEventListener(n, function () { idle = false; last = performance.now(); }, { passive: true });
+        });
+        (function loop(now) {
+          if (!idle && now - last > 4000) idle = true;
+          if (idle) {
+            var t = (now - t0) / 1000;
+            root.style.setProperty('--x', (50 + Math.sin(t / 5) * 18) + '%');
+            root.style.setProperty('--y', (42 + Math.cos(t / 7) * 12) + '%');
+          }
+          requestAnimationFrame(loop);
+        })(t0);
+      }
+
+      // « Go » : un tap ou un clic fait monter le lavis un instant.
+      var timer;
+      window.addEventListener('pointerdown', function (e) {
+        if (e.target.closest && e.target.closest('a')) return;
+        move(e);
+        body.classList.add('go');
+        clearTimeout(timer);
+        timer = setTimeout(function () { body.classList.remove('go'); }, 1300);
+      });
+
+      // PWA : service worker (nécessite HTTPS, fourni par GitHub Pages).
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').catch(function () {});
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
