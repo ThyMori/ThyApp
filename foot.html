@@ -329,7 +329,7 @@
     <h4>Le tir</h4>
     <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir ; vous pouvez aussi changer d’avis en glissant le doigt dans la bande rouge « annuler » avant de relâcher. Le résultat reste secret jusqu’à l’arrivée du ballon : rien n’indique si la passe ou le tir réussira. Le ballon se colle au premier joueur qu’il frôle (à moins de 3), de l’une ou l’autre équipe. S’il ne frôle personne, il s’arrête au bout de la flèche et le joueur le plus proche le prend. Après un tir, c’est à l’autre joueur de jouer.</p>
     <h4>Le duel</h4>
-    <p>Un joueur est « marqué » quand au moins un adversaire est à 3 unités ou moins de lui. Si le ballon arrive sur un joueur marqué, « DUEL ! » s’affiche, puis des dés sont lancés à l’écran : un dé pour le receveur plus un par coéquipier présent dans la zone (soutien), en face un dé par adversaire dans la zone. Bleus = dés bleus, Rouges = dés rouges ; on additionne. La plus grande somme gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au marqueur le plus proche). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie.</p>
+    <p>Un joueur est « marqué » quand au moins un adversaire est à 3 unités ou moins de lui. Le duel a lieu à l’arrivée du ballon : sur le joueur qu’il frôle, ou, quand il s’arrête de lui-même, sur le joueur le plus proche qui va le chercher. Si le receveur est marqué, « DUEL ! » s’affiche, puis des dés sont lancés à l’écran : un dé pour le receveur plus un par coéquipier présent dans la zone (soutien), en face un dé par adversaire dans la zone. Bleus = dés bleus, Rouges = dés rouges ; on additionne. La plus grande somme gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au marqueur le plus proche). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie.</p>
     <h4>Les sorties de terrain</h4>
     <ul>
       <li>Sur le côté : touche pour l’adversaire de celui qui a tiré.</li>
@@ -518,10 +518,13 @@
       // Un joueur est « marqué » si un joueur de l'équipe adverse est à moins de 3 de lui : il y a alors un duel de dés.
       var MARK_R = 3;
       function findDuel(M, out) {
-        if (!out || out.type !== 'catch') return null;
-        var c = M.players[out.idx], best = -1, bd = Infinity, def = [], att = [out.idx];
+        // Le duel a lieu à l'arrivée du ballon : sur le joueur frôlé (catch), ou à l'endroit où il s'arrête (stop, le plus proche le reçoit).
+        if (!out || (out.type !== 'catch' && out.type !== 'stop')) return null;
+        var rc = out.type === 'catch' ? out.idx : out.nearest;
+        var c = out.type === 'catch' ? M.players[rc] : { x: Math.max(EDGE / 2, Math.min(PW - EDGE / 2, out.at.x)), y: Math.max(EDGE / 2, Math.min(PH - EDGE / 2, out.at.y)), team: M.players[rc].team };
+        var best = -1, bd = Infinity, def = [], att = [rc];
         M.players.forEach(function (p, i) {
-          if (i === out.idx || !p.placed) return;
+          if (i === rc || !p.placed) return;
           var d = Math.hypot(p.x - c.x, p.y - c.y);
           if (d > MARK_R) return;
           if (p.team === c.team) att.push(i);
@@ -529,7 +532,7 @@
         });
         if (!def.length) return null;
         var n = [0, 0]; n[c.team] = att.length; n[1 - c.team] = def.length;
-        return { catcher: out.idx, marker: best, att: att, def: def, n: n };
+        return { catcher: rc, marker: best, att: att, def: def, n: n };
       }
       // Un dé par joueur de la zone (receveur et soutiens d'un côté, marqueurs de l'autre) ; dé bleu = équipe 0, rouge = équipe 1.
       // On additionne : la plus grande somme gagne ; à égalité, l'équipe du tireur l'emporte (la passe réussit).
@@ -1065,6 +1068,7 @@
         return els;
       }
       function sum(a) { return a.reduce(function (x, y) { return x + y; }, 0); }
+      function setWinner(out, d) { if (out.type === 'stop') out.nearest = d.idx; else out.idx = d.idx; out.duel = d; }
       function runDuel(out, shooterTeam, duel, done) {
         var red = [], blue = [], k;
         for (k = 0; k < duel.n[1]; k++) red.push(rollValue());      // rouges tirés d'abord (tests : __FOOT_ROLLS)
@@ -1073,7 +1077,7 @@
         var c = M.players[duel.catcher], mk = M.players[duel.marker];
         var tie = sum(blue) === sum(red);
         var msg = 'Bleu ' + sum(blue) + ' – Rouge ' + sum(red) + ' : ' + (tie ? 'égalité, la passe est réussie. ' : '') + nameOf(d.winnerTeam) + ' gagne le duel';
-        if (FAST) { out.idx = d.idx; out.duel = d; done(); return; }
+        if (FAST) { setWinner(out, d); done(); return; }
         $('dieName0').textContent = nameOf(0) + ' (' + duel.n[0] + ' dé' + (duel.n[0] > 1 ? 's' : '') + ')';
         $('dieName1').textContent = nameOf(1) + ' (' + duel.n[1] + ' dé' + (duel.n[1] > 1 ? 's' : '') + ')';
         $('sum0').textContent = ''; $('sum1').textContent = '';
@@ -1091,7 +1095,7 @@
             $('sum0').textContent = duel.n[0] > 1 ? '= ' + sum(blue) : sum(blue);
             $('sum1').textContent = duel.n[1] > 1 ? '= ' + sum(red) : sum(red);
             $('diceRes').textContent = msg; setStatus(msg);
-            setTimeout(function () { $('dice').hidden = true; out.idx = d.idx; out.duel = d; done(); }, 1900);
+            setTimeout(function () { $('dice').hidden = true; setWinner(out, d); done(); }, 1900);
           }, 1500 + 120 * Math.max(duel.n[0], duel.n[1]) + 300);
         }, 1400);
       }
@@ -1100,8 +1104,8 @@
         var duel = findDuel(M, out);
         if (duel) {
           runDuel(out, shooterTeam, duel, function () {
-            var p = M.players[out.idx];
-            if (out.idx !== duel.catcher) { M.ball = { x: p.x, y: p.y }; }
+            var wi = out.type === 'stop' ? out.nearest : out.idx, p = M.players[wi];
+            if (out.type === 'catch' && wi !== duel.catcher) { M.ball = { x: p.x, y: p.y }; }
             finishShot2(out, shooterTeam);
           });
           return;
