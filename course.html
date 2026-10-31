@@ -136,7 +136,9 @@
     .stepper .note { text-align: center; font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--muted); }
     .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .names { display: grid; gap: 8px; }
-    .name { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: center; }
+    .name { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; }
+    .caricon { display: block; flex: none; }
+    .whocar { display: inline-flex; flex: none; }
     .dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(235, 232, 225, .6); display: inline-block; flex: none; }
     input[type=text], select {
       width: 100%;
@@ -181,7 +183,7 @@
     h2 em { font-style: italic; color: var(--amber); }
     .ranks { list-style: none; display: grid; gap: 8px; }
     .rank {
-      display: grid; grid-template-columns: 34px 22px 1fr auto; gap: 10px; align-items: center;
+      display: grid; grid-template-columns: 34px 36px 1fr auto; gap: 10px; align-items: center;
       padding: 12px 14px; border: 1px solid rgba(235, 232, 225, .2); border-radius: 2px; background: rgba(13, 14, 17, .5);
     }
     .rank .pos { font-family: var(--serif); font-size: 24px; color: var(--amber); }
@@ -241,7 +243,7 @@
         <!-- Course -->
         <section class="screen" id="play" hidden>
           <div class="bar">
-            <div class="who"><span class="dot" id="whoDot"></span><span id="whoName"></span></div>
+            <div class="who"><span class="whocar" id="whoDot"></span><span id="whoName"></span></div>
             <div class="speed" id="speed"></div>
           </div>
           <div class="stage" id="stage"><canvas id="cv" aria-label="Circuit de course sur papier quadrillé" role="img"></canvas></div>
@@ -515,7 +517,7 @@
         names.forEach(function (nm, i) {
           g.players.push({
             idx: i, name: nm, color: COLORS[i], pos: starts[i].slice(), v: [0, 0], path: [starts[i].slice()],
-            crossings: track.closed ? -1 : 0, moves: 0, crashCount: 0, crashes: [], off: null, finished: false, temps: null
+            heading: track.closed ? Math.atan2(track.finish.ty, track.finish.tx) : 0, crossings: track.closed ? -1 : 0, moves: 0, crashCount: 0, crashes: [], off: null, finished: false, temps: null
           });
         });
         g.cands = candidatesFor(g, g.players[0]);
@@ -529,6 +531,7 @@
           pl.v = [0, 0];
         } else {
           var tr = g.track;
+          if (cand.x !== pl.pos[0] || cand.y !== pl.pos[1]) pl.heading = Math.atan2(cand.y - pl.pos[1], cand.x - pl.pos[0]);
           pl.v = cand.type === 'exit' ? [0, 0] : [cand.x - pl.pos[0], cand.y - pl.pos[1]];
           pl.pos = [cand.x, cand.y];
           pl.path.push(pl.pos.slice());
@@ -569,7 +572,97 @@
       // ======================================================================
       //  Dessin
       // ======================================================================
-      var PAPER = '#f1eee6', GRASS = '#cfd3c4', GRID = 'rgba(70, 105, 165, .28)', EDGE = '#26262b';
+      var PAPER = '#f1eee6', GRASS = '#cfd3c4', GRID = 'rgba(70, 105, 165, .26)', EDGE = '#2a2a30';
+
+      // ---------- Traits « faits main » ----------
+      // Le tremblé dépend de la position sur le papier (pas de l'écran) : il ne bouge pas quand la caméra bouge.
+      function hash2(ix, iy) {
+        var h = (ix * 374761393 + iy * 668265263) | 0;
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        return (((h ^ (h >>> 16)) >>> 0) / 4294967295) * 2 - 1;
+      }
+      function vnoise(x, y) {
+        var ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+        fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+        var a = hash2(ix, iy), b = hash2(ix + 1, iy), c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1);
+        return (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fy;
+      }
+      function wob(wx, wy, amp, seed) {
+        return [
+          vnoise(wx * 0.45 + seed, wy * 0.45) * amp + vnoise(wx * 1.7 + 9, wy * 1.7 + seed) * amp * 0.35,
+          vnoise(wx * 0.45 + 31, wy * 0.45 + seed) * amp + vnoise(wx * 1.7 + seed, wy * 1.7 + 17) * amp * 0.35
+        ];
+      }
+      function penPoints(world, closed, X, Y, amp, seed) {
+        var out = [], m = world.length, segs = closed ? m : m - 1;
+        function put(wx, wy) { var d = wob(wx, wy, amp, seed); out.push([X(wx) + d[0], Y(wy) + d[1]]); }
+        for (var i = 0; i < segs; i++) {
+          var a = world[i], b = world[(i + 1) % m];
+          var len = Math.hypot(X(b[0]) - X(a[0]), Y(b[1]) - Y(a[1])), k = Math.max(1, Math.ceil(len / 12));
+          for (var j = 0; j < k; j++) put(a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k);
+        }
+        if (!closed) put(world[m - 1][0], world[m - 1][1]);
+        return out;
+      }
+      function strokeSmooth(ctx, pts, closed) {
+        var n = pts.length;
+        if (n < 2) return;
+        ctx.beginPath();
+        if (closed) {
+          ctx.moveTo((pts[n - 1][0] + pts[0][0]) / 2, (pts[n - 1][1] + pts[0][1]) / 2);
+          for (var i = 0; i < n; i++) { var p = pts[i], q = pts[(i + 1) % n]; ctx.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2); }
+          ctx.closePath();
+        } else {
+          ctx.moveTo(pts[0][0], pts[0][1]);
+          for (var j = 1; j < n - 1; j++) { var a = pts[j], b = pts[j + 1]; ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); }
+          ctx.lineTo(pts[n - 1][0], pts[n - 1][1]);
+        }
+        ctx.stroke();
+      }
+      // Un trait au stylo : deux passages légèrement décalés, comme quand on repasse.
+      function pen(ctx, world, closed, X, Y, s, color, width, alpha) {
+        var amp = Math.min(2.6, 0.7 + s * 0.045);
+        ctx.save();
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = (alpha == null ? 1 : alpha);
+        ctx.lineWidth = width;
+        strokeSmooth(ctx, penPoints(world, closed, X, Y, amp, 0), closed);
+        ctx.globalAlpha = (alpha == null ? 1 : alpha) * 0.5;
+        ctx.lineWidth = Math.max(0.8, width * 0.55);
+        strokeSmooth(ctx, penPoints(world, closed, X, Y, amp, 41), closed);
+        ctx.restore();
+      }
+      function penCircle(ctx, wx, wy, rWorld, X, Y, s, color, width, fill) {
+        var pts = [], n = 14, amp = Math.min(2, 0.5 + s * 0.03);
+        for (var i = 0; i < n; i++) {
+          var a = i / n * 6.283, r = rWorld * (1 + vnoise(wx * 3 + i * 0.7, wy * 3) * 0.1);
+          pts.push([wx + Math.cos(a) * r, wy + Math.sin(a) * r]);
+        }
+        if (fill) { ctx.fillStyle = fill; ctx.beginPath(); pts.forEach(function (p, i) { if (i) ctx.lineTo(X(p[0]), Y(p[1])); else ctx.moveTo(X(p[0]), Y(p[1])); }); ctx.closePath(); ctx.fill(); }
+        pen(ctx, pts, true, X, Y, s * 0.6, color, width);
+      }
+
+      // Contour de la route : deux bords (circuit fermé) ou un contour fermé avec bouts arrondis (circuit ouvert)
+      function outlineOf(tr) {
+        if (tr.loops) return tr.loops;
+        var L = tr.line, n = L.length, hw = tr.hw, left = [], right = [], T = [];
+        for (var i = 0; i < n; i++) {
+          var p = tr.closed ? L[(i - 1 + n) % n] : L[Math.max(i - 1, 0)];
+          var q = tr.closed ? L[(i + 1) % n] : L[Math.min(i + 1, n - 1)];
+          var t = norm([q[0] - p[0], q[1] - p[1]]);
+          T.push(t);
+          left.push([L[i][0] - t[1] * hw, L[i][1] + t[0] * hw]);
+          right.push([L[i][0] + t[1] * hw, L[i][1] - t[0] * hw]);
+        }
+        if (tr.closed) { tr.loops = [left, right]; return tr.loops; }
+        var loop = left.slice(), E = L[n - 1], te = T[n - 1], S = L[0], ts = T[0], k;
+        for (k = 1; k < 12; k++) { var f = k / 12 * Math.PI; loop.push([E[0] + hw * (Math.cos(f) * -te[1] + Math.sin(f) * te[0]), E[1] + hw * (Math.cos(f) * te[0] + Math.sin(f) * te[1])]); }
+        for (k = n - 1; k >= 0; k--) loop.push(right[k]);
+        for (k = 1; k < 12; k++) { var g2 = Math.PI - k / 12 * Math.PI; loop.push([S[0] + hw * (Math.cos(g2) * -ts[1] - Math.sin(g2) * ts[0]), S[1] + hw * (Math.cos(g2) * ts[0] - Math.sin(g2) * ts[1])]); }
+        tr.loops = [loop];
+        return tr.loops;
+      }
 
       function drawTrack(ctx, tr, cam, w, h, withGrid) {
         var s = cam.s;
@@ -578,15 +671,13 @@
         ctx.fillStyle = GRASS;
         ctx.fillRect(0, 0, w, h);
 
-        function path() {
-          ctx.beginPath();
-          tr.line.forEach(function (p, i) { if (i) ctx.lineTo(X(p[0]), Y(p[1])); else ctx.moveTo(X(p[0]), Y(p[1])); });
-          if (tr.closed) ctx.closePath();
-        }
+        // la route : remplissage uni, puis bords au stylo
         ctx.lineJoin = 'round';
         ctx.lineCap = tr.closed ? 'butt' : 'round';
-        path(); ctx.strokeStyle = EDGE; ctx.lineWidth = tr.hw * 2 * s + Math.max(2, s * 0.14); ctx.stroke();
-        path(); ctx.strokeStyle = PAPER; ctx.lineWidth = tr.hw * 2 * s; ctx.stroke();
+        ctx.beginPath();
+        tr.line.forEach(function (p, i) { if (i) ctx.lineTo(X(p[0]), Y(p[1])); else ctx.moveTo(X(p[0]), Y(p[1])); });
+        if (tr.closed) ctx.closePath();
+        ctx.strokeStyle = PAPER; ctx.lineWidth = tr.hw * 2 * s + 1; ctx.stroke();
 
         if (withGrid) {
           var x0 = Math.floor(cam.cx - w / 2 / s), x1 = Math.ceil(cam.cx + w / 2 / s);
@@ -597,27 +688,88 @@
           for (var gy = y0; gy <= y1; gy++) { var yy = Math.round(Y(gy)) + .5; ctx.moveTo(0, yy); ctx.lineTo(w, yy); }
           ctx.stroke();
         }
-        // ligne d'arrivée (damier) et de départ
-        function bar(L, checker) {
-          ctx.save();
-          ctx.translate(X(L.x), Y(L.y));
-          ctx.rotate(Math.atan2(L.ty, L.tx));
-          var n = Math.ceil(tr.hw * 2);
-          if (checker) {
-            for (var i = 0; i < n; i++) {
-              for (var j = 0; j < 2; j++) {
-                ctx.fillStyle = (i + j) % 2 ? '#ffffff' : '#111114';
-                ctx.fillRect((j - 1) * s * 0.5, (-tr.hw + i * (tr.hw * 2 / n)) * s, s * 0.5, tr.hw * 2 / n * s + 0.5);
-              }
-            }
-          } else {
-            ctx.fillStyle = 'rgba(38, 38, 43, .55)';
-            ctx.fillRect(-s * 0.1, -tr.hw * s, s * 0.2, tr.hw * 2 * s);
+        var bw = Math.max(1.8, Math.min(3.4, s * 0.1));
+        outlineOf(tr).forEach(function (loop) { pen(ctx, loop, true, X, Y, s, EDGE, bw); });
+
+        // ligne d'arrivée : damier dessiné à la main
+        var F = tr.finish;
+        function W(a, b) { return [F.x + F.tx * a + F.nx * b, F.y + F.ty * a + F.ny * b]; }
+        var rows = Math.ceil(tr.hw * 2), rh = tr.hw * 2 / rows;
+        ctx.fillStyle = '#17171b';
+        for (var i = 0; i < rows; i++) {
+          for (var j = 0; j < 2; j++) {
+            if ((i + j) % 2) continue;
+            var q = [W((j - 1) * 0.5, -tr.hw + i * rh), W(j * 0.5 - 0.5 + 0.5, -tr.hw + i * rh), W(j * 0.5, -tr.hw + (i + 1) * rh), W((j - 1) * 0.5, -tr.hw + (i + 1) * rh)];
+            ctx.beginPath();
+            q.forEach(function (p, k) { var d = wob(p[0], p[1], Math.min(1.6, 0.4 + s * 0.03), 7); if (k) ctx.lineTo(X(p[0]) + d[0], Y(p[1]) + d[1]); else ctx.moveTo(X(p[0]) + d[0], Y(p[1]) + d[1]); });
+            ctx.closePath(); ctx.fill();
           }
-          ctx.restore();
         }
-        if (!tr.closed) bar(tr.startLine, false);
-        bar(tr.finish, true);
+        pen(ctx, [W(-0.5, -tr.hw), W(0.5, -tr.hw), W(0.5, tr.hw), W(-0.5, tr.hw)], true, X, Y, s, '#17171b', Math.max(1.2, s * 0.05));
+        if (!tr.closed) {
+          var S = tr.startLine;
+          pen(ctx, [[S.x, S.y - tr.hw], [S.x, S.y + tr.hw]], false, X, Y, s, 'rgba(38,38,43,.8)', Math.max(1.4, s * 0.07));
+        }
+      }
+
+      // ---------- Voitures ----------
+      function shade(hex, k) {
+        var n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+        return 'rgb(' + Math.round(r * k) + ',' + Math.round(g * k) + ',' + Math.round(b * k) + ')';
+      }
+      function rr(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+      }
+      // Petite voiture de course vue de dessus (style Micro Machines), tournée vers l'angle ang (0 = vers la droite).
+      function drawCar(ctx, x, y, ang, L, color, alpha) {
+        var Wd = L * 0.56, line = Math.max(1, L * 0.045);
+        ctx.save();
+        ctx.translate(x, y); ctx.rotate(ang);
+        ctx.globalAlpha = alpha == null ? 1 : alpha;
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        // ombre
+        ctx.fillStyle = 'rgba(0,0,0,.24)';
+        ctx.beginPath(); ctx.ellipse(L * 0.03, Wd * 0.1, L * 0.54, Wd * 0.52, 0, 0, 6.283); ctx.fill();
+        // roues
+        ctx.fillStyle = '#16161a';
+        [[-0.3, -1], [-0.3, 1], [0.3, -1], [0.3, 1]].forEach(function (p) {
+          rr(ctx, p[0] * L - L * 0.12, p[1] * Wd * 0.5 - Wd * 0.13, L * 0.24, Wd * 0.26, L * 0.04); ctx.fill();
+        });
+        // aileron arrière et avant
+        ctx.fillStyle = shade(color, 0.6);
+        rr(ctx, -L * 0.53, -Wd * 0.5, L * 0.1, Wd, L * 0.03); ctx.fill();
+        rr(ctx, L * 0.43, -Wd * 0.38, L * 0.09, Wd * 0.76, L * 0.03); ctx.fill();
+        // carrosserie
+        ctx.beginPath();
+        ctx.moveTo(-0.47 * L, -0.34 * Wd);
+        ctx.lineTo(-0.12 * L, -0.47 * Wd); ctx.lineTo(0.2 * L, -0.44 * Wd); ctx.lineTo(0.4 * L, -0.2 * Wd); ctx.lineTo(0.47 * L, -0.08 * Wd);
+        ctx.lineTo(0.47 * L, 0.08 * Wd); ctx.lineTo(0.4 * L, 0.2 * Wd); ctx.lineTo(0.2 * L, 0.44 * Wd); ctx.lineTo(-0.12 * L, 0.47 * Wd);
+        ctx.lineTo(-0.47 * L, 0.34 * Wd); ctx.closePath();
+        ctx.fillStyle = color; ctx.fill();
+        ctx.lineWidth = line; ctx.strokeStyle = 'rgba(10,10,14,.85)'; ctx.stroke();
+        // bande blanche
+        ctx.fillStyle = 'rgba(255,255,255,.82)';
+        ctx.fillRect(-0.44 * L, -0.07 * Wd, 0.88 * L, 0.14 * Wd);
+        // cockpit et casque
+        ctx.fillStyle = '#16212e';
+        ctx.beginPath(); ctx.ellipse(-0.05 * L, 0, 0.17 * L, 0.22 * Wd, 0, 0, 6.283); ctx.fill();
+        ctx.fillStyle = '#f4f1e8';
+        ctx.beginPath(); ctx.arc(-0.07 * L, 0, 0.075 * L, 0, 6.283); ctx.fill();
+        // reflet
+        ctx.fillStyle = 'rgba(255,255,255,.22)';
+        ctx.beginPath(); ctx.ellipse(0.15 * L, -0.22 * Wd, 0.14 * L, 0.07 * Wd, -0.2, 0, 6.283); ctx.fill();
+        ctx.restore();
+      }
+      function carIcon(color, wpx) {
+        var c = document.createElement('canvas'), hpx = Math.round(wpx * 0.62), dp = 2;
+        c.width = wpx * dp; c.height = hpx * dp; c.style.width = wpx + 'px'; c.style.height = hpx + 'px'; c.className = 'caricon';
+        var g = c.getContext('2d'); g.scale(dp, dp);
+        drawCar(g, wpx / 2, hpx / 2, 0, wpx * 0.92, color, 1);
+        return c;
       }
 
       function drawGame(ctx, g, cam, w, h, sel, showCands) {
@@ -625,94 +777,78 @@
         function X(x) { return (x - cam.cx) * s + w / 2; }
         function Y(y) { return (y - cam.cy) * s + h / 2; }
         drawTrack(ctx, g.track, cam, w, h, true);
+        var cur = g.players[g.turn];
 
         // zone rouge : pour la voiture dont c'est le tour et qui est hors piste, la route en aval de sa sortie est interdite
-        var curP = g.players[g.turn];
-        if (!g.over && curP.off && curP.off.zone.length > 1) {
+        if (!g.over && cur.off && cur.off.zone.length > 1) {
           ctx.save();
           ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
           ctx.beginPath();
-          curP.off.zone.forEach(function (p, i) { if (i) ctx.lineTo(X(p[0]), Y(p[1])); else ctx.moveTo(X(p[0]), Y(p[1])); });
-          ctx.strokeStyle = 'rgba(214, 40, 40, .38)'; ctx.lineWidth = g.track.hw * 2 * s; ctx.stroke();
-          // limite : trait rouge en travers de la route, au point de sortie
-          var q0 = pointAt(g.track, curP.off.s - 0.5), q1 = pointAt(g.track, curP.off.s + 0.5);
-          var tx = q1[0] - q0[0], ty = q1[1] - q0[1], tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-          var mx = (q0[0] + q1[0]) / 2, my = (q0[1] + q1[1]) / 2;
-          ctx.beginPath();
-          ctx.moveTo(X(mx - ty * g.track.hw), Y(my + tx * g.track.hw)); ctx.lineTo(X(mx + ty * g.track.hw), Y(my - tx * g.track.hw));
-          ctx.strokeStyle = '#d62828'; ctx.lineWidth = Math.max(3, s * 0.2); ctx.stroke();
+          cur.off.zone.forEach(function (p, i) { if (i) ctx.lineTo(X(p[0]), Y(p[1])); else ctx.moveTo(X(p[0]), Y(p[1])); });
+          ctx.strokeStyle = 'rgba(214, 40, 40, .36)'; ctx.lineWidth = g.track.hw * 2 * s; ctx.stroke();
           ctx.restore();
+          var q0 = pointAt(g.track, cur.off.s - 0.5), q1 = pointAt(g.track, cur.off.s + 0.5);
+          var tx = q1[0] - q0[0], ty = q1[1] - q0[1], tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+          var mx = (q0[0] + q1[0]) / 2, my = (q0[1] + q1[1]) / 2, hw = g.track.hw;
+          pen(ctx, [[mx - ty * hw, my + tx * hw], [mx + ty * hw, my - tx * hw]], false, X, Y, s, '#d62828', Math.max(3, s * 0.16));
         }
 
-        var dotR = Math.max(2.2, s * 0.13);
-        // traces des voitures
+        // traces au stylo, points de passage, croix de sortie de route
+        var dotR = Math.max(1.8, s * 0.075), lw = Math.max(1.8, s * 0.075);
         g.players.forEach(function (pl) {
-          ctx.strokeStyle = pl.color; ctx.lineWidth = Math.max(1.6, s * 0.09); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-          ctx.beginPath();
-          pl.path.forEach(function (p, i) { if (i) ctx.lineTo(X(p[0]), Y(p[1])); else ctx.moveTo(X(p[0]), Y(p[1])); });
-          ctx.stroke();
+          if (pl.path.length > 1) pen(ctx, pl.path, false, X, Y, s, pl.color, lw);
           ctx.fillStyle = pl.color;
           pl.path.forEach(function (p) { ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), dotR, 0, 6.283); ctx.fill(); });
-          // sorties de route : croix à l'endroit où la voiture a quitté la piste
           pl.crashes.forEach(function (c) {
-            var r = s * 0.22, cx = X(c.at[0]), cy = Y(c.at[1]);
-            ctx.lineWidth = Math.max(1.8, s * 0.1);
-            ctx.beginPath(); ctx.moveTo(cx - r, cy - r); ctx.lineTo(cx + r, cy + r); ctx.moveTo(cx + r, cy - r); ctx.lineTo(cx - r, cy + r); ctx.stroke();
+            var r = 0.28;
+            pen(ctx, [[c.at[0] - r, c.at[1] - r], [c.at[0] + r, c.at[1] + r]], false, X, Y, s, '#c1272d', lw * 1.3);
+            pen(ctx, [[c.at[0] + r, c.at[1] - r], [c.at[0] - r, c.at[1] + r]], false, X, Y, s, '#c1272d', lw * 1.3);
           });
         });
 
-        var cur = g.players[g.turn];
         if (showCands && !g.over) {
-          // vecteur de vitesse actuel (pointillé) et point d'arrivée sans changement
-          ctx.save(); ctx.setLineDash([3, 5]); ctx.strokeStyle = cur.color; ctx.globalAlpha = .55; ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.moveTo(X(cur.pos[0]), Y(cur.pos[1])); ctx.lineTo(X(cur.pos[0] + cur.v[0]), Y(cur.pos[1] + cur.v[1])); ctx.stroke();
+          // vecteur de vitesse actuel (pointillé) et zone des neuf choix
+          ctx.save(); ctx.setLineDash([3, 6]);
+          pen(ctx, [cur.pos, [cur.pos[0] + cur.v[0], cur.pos[1] + cur.v[1]]], false, X, Y, s, cur.color, 1.6, 0.55);
           ctx.restore();
-          // zone des neuf choix
-          var cx0 = cur.pos[0] + cur.v[0];
-          var cy0 = cur.pos[1] + cur.v[1];
-          ctx.strokeStyle = cur.color; ctx.globalAlpha = .35; ctx.lineWidth = 1.5;
-          ctx.strokeRect(X(cx0 - 1), Y(cy0 - 1), s * 2, s * 2);
-          ctx.globalAlpha = 1;
+          var cx0 = cur.pos[0] + cur.v[0], cy0 = cur.pos[1] + cur.v[1];
+          pen(ctx, [[cx0 - 1, cy0 - 1], [cx0 + 1, cy0 - 1], [cx0 + 1, cy0 + 1], [cx0 - 1, cy0 + 1]], true, X, Y, s, cur.color, 1.4, 0.4);
           g.cands.forEach(function (c) {
-            var x = X(c.x), y = Y(c.y), r = Math.max(5, s * 0.3);
-            var isSel = sel && sel.x === c.x && sel.y === c.y;
-            if (c.type === 'illegal') {
-              ctx.strokeStyle = 'rgba(214, 40, 40, .6)'; ctx.lineWidth = 2;
-              ctx.beginPath(); ctx.arc(x, y, r * 0.75, 0, 6.283); ctx.stroke();
-              ctx.beginPath(); ctx.moveTo(x - r * .5, y + r * .5); ctx.lineTo(x + r * .5, y - r * .5); ctx.stroke();
-              return;
-            }
-            if (c.type === 'blocked' || c.type === 'toofast') {
-              ctx.strokeStyle = 'rgba(60,60,70,.55)'; ctx.lineWidth = 2;
-              ctx.beginPath(); ctx.arc(x, y, r * 0.75, 0, 6.283); ctx.stroke();
-              ctx.beginPath(); ctx.moveTo(x - r * .5, y - r * .5); ctx.lineTo(x + r * .5, y + r * .5); ctx.stroke();
+            var isSel = sel && sel.x === c.x && sel.y === c.y, rw = 0.3;
+            var bad = c.type === 'blocked' || c.type === 'toofast', ill = c.type === 'illegal';
+            if (bad || ill) {
+              var col = ill ? 'rgba(214, 40, 40, .7)' : 'rgba(60, 60, 70, .55)';
+              penCircle(ctx, c.x, c.y, rw * 0.75, X, Y, s, col, 1.8);
+              pen(ctx, [[c.x - rw * .5, c.y + rw * .5], [c.x + rw * .5, c.y - rw * .5]], false, X, Y, s, col, 1.8);
               return;
             }
             if (c.type === 'exit') {
-              ctx.strokeStyle = isSel ? '#c1272d' : 'rgba(193, 39, 45, .75)'; ctx.lineWidth = isSel ? 3.4 : 2;
-              ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, 6.283);
-              if (isSel) { ctx.fillStyle = 'rgba(193, 39, 45, .25)'; ctx.fill(); }
-              ctx.stroke();
-              ctx.beginPath(); ctx.moveTo(x - r * .45, y - r * .45); ctx.lineTo(x + r * .45, y + r * .45); ctx.moveTo(x + r * .45, y - r * .45); ctx.lineTo(x - r * .45, y + r * .45); ctx.stroke();
+              var red = isSel ? '#c1272d' : 'rgba(193, 39, 45, .8)';
+              penCircle(ctx, c.x, c.y, rw * 0.8, X, Y, s, red, isSel ? 3 : 2, isSel ? 'rgba(193, 39, 45, .25)' : null);
+              pen(ctx, [[c.x - rw * .45, c.y - rw * .45], [c.x + rw * .45, c.y + rw * .45]], false, X, Y, s, red, 2);
+              pen(ctx, [[c.x + rw * .45, c.y - rw * .45], [c.x - rw * .45, c.y + rw * .45]], false, X, Y, s, red, 2);
               return;
             }
-            ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283);
-            ctx.fillStyle = isSel ? cur.color : 'rgba(255,255,255,.7)'; ctx.fill();
-            ctx.strokeStyle = cur.color; ctx.lineWidth = isSel ? 3 : 2; ctx.stroke();
-            if (c.cross > 0) { ctx.fillStyle = isSel ? '#fff' : cur.color; ctx.font = 'bold ' + Math.round(r * 1.1) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⚑', x, y + 1); }
+            penCircle(ctx, c.x, c.y, rw, X, Y, s, cur.color, isSel ? 3 : 2, isSel ? shade(cur.color, 1) : 'rgba(255,255,255,.6)');
+            if (c.cross > 0) { ctx.fillStyle = isSel ? '#fff' : cur.color; ctx.font = 'bold ' + Math.round(Math.max(8, s * 0.3)) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⚑', X(c.x), Y(c.y) + 1); }
           });
           if (sel) {
-            ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = sel.type === 'exit' ? '#c1272d' : cur.color; ctx.lineWidth = 2.4;
-            ctx.beginPath(); ctx.moveTo(X(cur.pos[0]), Y(cur.pos[1])); ctx.lineTo(X(sel.x), Y(sel.y)); ctx.stroke(); ctx.restore();
+            ctx.save(); ctx.setLineDash([6, 4]);
+            pen(ctx, [cur.pos, [sel.x, sel.y]], false, X, Y, s, sel.type === 'exit' ? '#c1272d' : cur.color, 2.4);
+            ctx.restore();
+            var da = Math.atan2(sel.y - cur.pos[1], sel.x - cur.pos[0]);
+            if (sel.x !== cur.pos[0] || sel.y !== cur.pos[1]) drawCar(ctx, X(sel.x), Y(sel.y), da, Math.max(20, Math.min(40, s * 0.95)), cur.color, 0.55);
           }
         }
-        // voitures (gros point cerclé)
+        // voitures
+        var CL = Math.max(20, Math.min(40, s * 0.95));
         g.players.forEach(function (pl) {
-          var x = X(pl.pos[0]), y = Y(pl.pos[1]), r = Math.max(5, s * 0.27);
-          if (pl === cur && !g.over) { ctx.beginPath(); ctx.arc(x, y, r + (s < 12 ? 9 : 5), 0, 6.283); ctx.strokeStyle = pl.color; ctx.globalAlpha = s < 12 ? .6 : .35; ctx.lineWidth = 3; ctx.stroke(); ctx.globalAlpha = 1; }
-          ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fillStyle = pl.color; ctx.fill();
-          ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+          if (pl === cur && !g.over) {
+            var hr = CL * 0.62 + (s < 12 ? 8 : 4);
+            penCircle(ctx, pl.pos[0], pl.pos[1], hr / s, X, Y, s, pl.color, 2.6);
+          }
         });
+        g.players.forEach(function (pl) { drawCar(ctx, X(pl.pos[0]), Y(pl.pos[1]), pl.heading, CL, pl.color, 1); });
       }
 
       // ======================================================================
@@ -785,7 +921,7 @@
         for (var j = 0; j < settings.players; j++) {
           (function (j) {
             var row = document.createElement('label'); row.className = 'name';
-            var d = document.createElement('span'); d.className = 'dot'; d.style.background = COLORS[j];
+            var d = carIcon(COLORS[j], 34);
             var inp = document.createElement('input'); inp.type = 'text'; inp.maxLength = 20; inp.autocomplete = 'off';
             inp.placeholder = 'Joueur ' + (j + 1) + ' (' + COLOR_NAMES[j] + ')'; inp.value = settings.names[j] || '';
             inp.setAttribute('aria-label', 'Nom du joueur ' + (j + 1));
@@ -847,7 +983,7 @@
       function beginTurn(animate) {
         selected = null;
         var pl = game.players[game.turn];
-        $('whoDot').style.background = pl.color;
+        $('whoDot').textContent = ''; $('whoDot').appendChild(carIcon(pl.color, 40));
         $('whoName').textContent = pl.name;
         $('speed').textContent = '';
         var b = document.createElement('b');
@@ -876,7 +1012,7 @@
         game.players.forEach(function (pl, i) {
           var c = document.createElement('div');
           c.className = 'chip' + (i === game.turn ? ' cur' : '');
-          var d = document.createElement('span'); d.className = 'dot'; d.style.background = pl.color;
+          var d = carIcon(pl.color, 22);
           var n = document.createElement('span'); n.className = 'nm'; n.textContent = pl.name;
           var l = document.createElement('span');
           l.textContent = game.track.closed ? Math.max(1, Math.min(pl.crossings + 1, game.laps)) + '/' + game.laps : '';
@@ -962,7 +1098,7 @@
         function row(p, pos, dnf) {
           var li = document.createElement('li'); li.className = 'rank' + (dnf ? ' dnf' : '');
           var a = document.createElement('span'); a.className = 'pos'; a.textContent = dnf ? '–' : pos;
-          var d = document.createElement('span'); d.className = 'dot'; d.style.background = p.color;
+          var d = carIcon(p.color, 34);
           var n = document.createElement('span'); n.className = 'nm'; n.textContent = p.name;
           var t = document.createElement('span'); t.className = 'tm';
           t.textContent = dnf ? 'en course' : fmt(p.temps) + ' coups';
@@ -1004,7 +1140,7 @@
         list.forEach(function (r, i) {
           var li = document.createElement('li'); li.className = 'rank';
           var a = document.createElement('span'); a.className = 'pos'; a.textContent = i + 1;
-          var d = document.createElement('span'); d.className = 'dot'; d.style.background = i === 0 ? '#f6b564' : 'transparent';
+          var d = i === 0 ? carIcon('#d9962f', 34) : document.createElement('span');
           var n = document.createElement('span'); n.className = 'nm'; n.textContent = r.nom;
           var t = document.createElement('span'); t.className = 'tm'; t.textContent = fmt(r.temps) + ' coups';
           var sm = document.createElement('small');
