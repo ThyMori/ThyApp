@@ -7,7 +7,7 @@
  *   - « local » : repli sans configuration. Les données restent dans ce navigateur (localStorage),
  *     pas de connexion, tout est accessible.
  *
- * Bases : spectacles, productions, personnes (liées par identifiants) et users (droits d'accès).
+ * Bases : spectacles, productions, personnes (liées par identifiants), records (Hall of Fame de la course) et users (droits d'accès).
  *   spectacle.productionId -> productions[].id
  *   spectacle.mesId        -> personnes[].id   (mise en scène)
  *   users[].id             -> adresse e-mail    { admin: bool, sections: ['spectacles', …] }
@@ -21,10 +21,11 @@
   // Parties de l'application auxquelles on peut donner accès.
   var SECTIONS = [
     { id: 'jeu-de-la-vie', label: 'Jeu de la vie' },
+    { id: 'course', label: 'Course' },
     { id: 'spectacles', label: 'Spectacles' }
   ];
   // Partie qui commande l'accès à chaque base (users : réservé aux administrateurs).
-  var SECTION_OF = { spectacles: 'spectacles', productions: 'spectacles', personnes: 'spectacles', users: null };
+  var SECTION_OF = { spectacles: 'spectacles', productions: 'spectacles', personnes: 'spectacles', records: 'course', users: null };
 
   var BASE = (document.currentScript && document.currentScript.src) ? document.currentScript.src.replace(/[^\/]*$/, '') : '';
 
@@ -411,6 +412,7 @@
     spectacles: col('spectacles'),
     productions: col('productions'),
     personnes: col('personnes'),
+    records: col('records'),
     users: col('users'),
     get state() { return state; },
     can: can,

@@ -39,6 +39,14 @@ service cloud.firestore {
         && (!('mesId' in d) || d.mesId is string);
     }
 
+    function validRecord(d) {
+      return d.nom is string && d.nom.size() > 0 && d.nom.size() <= 40
+        && d.circuit is string && d.circuit.size() <= 40
+        && d.tours is int && d.tours >= 1 && d.tours <= 20
+        && d.temps is number && d.temps > 0 && d.temps < 100000
+        && d.joueurs is int && d.joueurs >= 1 && d.joueurs <= 4;
+    }
+
     // Droits d'accès : chacun peut lire sa propre fiche (pour savoir ce qu'il a le droit d'ouvrir),
     // seuls les administrateurs lisent et modifient les autres. Un administrateur ne peut ni se
     // retirer ses droits ni supprimer sa propre fiche (pour ne pas s'enfermer dehors).
@@ -63,6 +71,12 @@ service cloud.firestore {
     match /personnes/{id} {
       allow read, delete: if can('spectacles');
       allow create, update: if can('spectacles') && validNom(request.resource.data);
+    }
+
+    // Partie « Course » : Hall of Fame (un enregistrement par coureur et par course terminée).
+    match /records/{id} {
+      allow read, delete: if can('course');
+      allow create, update: if can('course') && validRecord(request.resource.data);
     }
 
     // Tout le reste est interdit.
