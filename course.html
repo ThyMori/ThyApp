@@ -355,6 +355,9 @@
           F = line[i].slice();
           t = norm([line[i + 1][0] - line[i - 1][0], line[i + 1][1] - line[i - 1][1]]);
         }
+        tr.arc = [0];
+        for (var q = 1; q < line.length; q++) tr.arc.push(tr.arc[q - 1] + dist(line[q], line[q - 1]));
+        tr.total = tr.arc[line.length - 1] + (def.closed ? dist(line[line.length - 1], line[0]) : 0);
         tr.finish = { x: F[0], y: F[1], tx: t[0], ty: t[1], nx: -t[1], ny: t[0] };
         // ligne de départ (circuit ouvert : un peu après le premier point)
         tr.startLine = def.closed ? tr.finish : { x: line[0][0] + 2.5, y: line[0][1], tx: 1, ty: 0, nx: 0, ny: 1 };
@@ -374,6 +377,39 @@
           if (d < best) best = d;
         }
         return best;
+      }
+      // Abscisse curviligne (distance le long de l'axe de la route) du point de l'axe le plus proche de (x, y)
+      function arcOf(tr, x, y) {
+        var L = tr.line, n = L.length, segs = tr.closed ? n : n - 1, best = 1e9, bs = 0;
+        for (var i = 0; i < segs; i++) {
+          var a = L[i], b = L[(i + 1) % n];
+          var dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+          var u = l2 ? ((x - a[0]) * dx + (y - a[1]) * dy) / l2 : 0;
+          u = u < 0 ? 0 : u > 1 ? 1 : u;
+          var d = Math.hypot(x - (a[0] + u * dx), y - (a[1] + u * dy));
+          if (d < best) { best = d; bs = tr.arc[i] + u * Math.sqrt(l2); }
+        }
+        return bs;
+      }
+      // différence d'abscisses ramenée dans ]-L/2 ; L/2] sur un circuit fermé (positif = en aval)
+      function wrapDiff(tr, d) {
+        if (!tr.closed) return d;
+        var h = tr.total / 2;
+        return ((d + h) % tr.total + tr.total) % tr.total - h;
+      }
+      function pointAt(tr, s) {
+        var L = tr.line, n = L.length;
+        if (tr.closed) s = ((s % tr.total) + tr.total) % tr.total; else s = Math.max(0, Math.min(tr.total, s));
+        var i = 0;
+        while (i < n - 1 && tr.arc[i + 1] <= s) i++;
+        var a = L[i], b = L[(i + 1) % n], l = dist(a, b) || 1, u = Math.max(0, Math.min(1, (s - tr.arc[i]) / l));
+        return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
+      }
+      function subLine(tr, s0, s1) {
+        var out = [], step = 0.5;
+        for (var s = s0; s < s1; s += step) out.push(pointAt(tr, s));
+        out.push(pointAt(tr, s1));
+        return out;
       }
       function onRoad(tr, x, y) { return distToTrack(tr, x, y) <= tr.hw + 1e-9; }
 
@@ -400,17 +436,46 @@
       var COLOR_NAMES = ['bleu', 'rouge', 'vert', 'noir'];
       var game = null;
 
-      // Résout un déplacement de pos vers target. Renvoie { type: 'ok'|'crash'|'blocked', cross, u }.
+      // Résout un déplacement de pos vers target. Types :
+      //   ok       : reste sur la route
+      //   exit     : quitte la route ; la voiture s'arrête là où elle arrive (hors piste), vitesse nulle
+      //   off      : manœuvre hors piste (vitesse 2 maxi)
+      //   reentry  : retour sur la route, en amont de l'endroit de la sortie
+      //   illegal  : sortie puis retour sur la route, traversée de la route, ou retour en aval de la sortie
+      //   toofast  : hors piste, plus de 2 carreaux par tour
+      //   blocked  : case occupée par une autre voiture
+      var MAX_OFF = 2;
       function resolveMove(g, pl, target) {
         var tr = g.track, a = pl.pos, b = target;
-        var len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        var steps = Math.max(1, Math.ceil(len / 0.2));
-        var crash = false;
+        var vx = b[0] - a[0], vy = b[1] - a[1];
+        var startOn = onRoad(tr, a[0], a[1]);
+        if (!startOn && Math.hypot(vx, vy) > MAX_OFF + 1e-9) return { type: 'toofast', cross: 0, u: 0 };
+        var len = Math.hypot(vx, vy), steps = Math.max(1, Math.ceil(len / 0.2));
+        var firstOff = -1, firstOn = -1;
         for (var i = 1; i <= steps; i++) {
-          var u = i / steps;
-          if (!onRoad(tr, a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u)) { crash = true; break; }
+          var u = i / steps, on = onRoad(tr, a[0] + vx * u, a[1] + vy * u);
+          if (startOn && !on) { firstOff = i; break; }
+          if (!startOn && on && firstOn < 0) firstOn = i;
         }
-        if (crash) return { type: 'crash', cross: 0, u: 0 };
+        var endOn = onRoad(tr, b[0], b[1]);
+        var type = 'ok', exitPt = null, tol = tr.hw + 0.75;
+        if (startOn) {
+          if (firstOff >= 0) {
+            if (endOn) return { type: 'illegal', cross: 0, u: 0 };
+            var up = (firstOff - 1) / steps;
+            type = 'exit'; exitPt = [a[0] + vx * up, a[1] + vy * up]; tol = tr.hw + 8;
+          }
+        } else {
+          tol = tr.hw + 8;
+          if (firstOn < 0) type = 'off';
+          else {
+            if (!endOn) return { type: 'illegal', cross: 0, u: 0 };
+            var ue = firstOn / steps;
+            var diff = wrapDiff(tr, arcOf(tr, a[0] + vx * ue, a[1] + vy * ue) - (pl.off ? pl.off.s : 0));
+            if (pl.off && diff > 0.5) return { type: 'illegal', cross: 0, u: 0 };
+            type = 'reentry';
+          }
+        }
         for (var k = 0; k < g.players.length; k++) {
           var o = g.players[k];
           if (o !== pl && o.pos[0] === b[0] && o.pos[1] === b[1]) return { type: 'blocked', cross: 0, u: 0 };
@@ -422,12 +487,13 @@
         var cross = 0, cu = 0;
         if ((da < 0 && db >= 0) || (da >= 0 && db < 0)) {
           var uu = -da / (db - da);
-          var px = a[0] + (b[0] - a[0]) * uu, py = a[1] + (b[1] - a[1]) * uu;
+          var px = a[0] + vx * uu, py = a[1] + vy * uu;
           var lat = (px - F.x) * F.nx + (py - F.y) * F.ny;
-          if (Math.abs(lat) <= tr.hw + 0.75) { cross = da < 0 ? 1 : -1; cu = uu; }
+          if (Math.abs(lat) <= tol) { cross = da < 0 ? 1 : -1; cu = uu; }
         }
-        return { type: 'ok', cross: cross, u: cu };
+        return { type: type, cross: cross, u: cu, exit: exitPt };
       }
+      var SELECTABLE = { ok: 1, exit: 1, off: 1, reentry: 1, stop: 1 };
 
       function candidatesFor(g, pl) {
         var res = [], cx = pl.pos[0] + pl.v[0], cy = pl.pos[1] + pl.v[1];
@@ -435,9 +501,11 @@
           for (var dx = -1; dx <= 1; dx++) {
             var t = [cx + dx, cy + dy];
             var r = resolveMove(g, pl, t);
-            res.push({ x: t[0], y: t[1], dx: dx, dy: dy, type: r.type, cross: r.cross, u: r.u });
+            res.push({ x: t[0], y: t[1], dx: dx, dy: dy, type: r.type, cross: r.cross, u: r.u, exit: r.exit });
           }
         }
+        // jamais bloqué : si plus rien n'est jouable, on peut s'arrêter sur place
+        if (!res.some(function (c) { return SELECTABLE[c.type]; })) res.push({ x: pl.pos[0], y: pl.pos[1], dx: 0, dy: 0, type: 'stop', cross: 0, u: 0 });
         return res;
       }
 
@@ -447,7 +515,7 @@
         names.forEach(function (nm, i) {
           g.players.push({
             idx: i, name: nm, color: COLORS[i], pos: starts[i].slice(), v: [0, 0], path: [starts[i].slice()],
-            crossings: track.closed ? -1 : 0, moves: 0, crashCount: 0, crashes: [], finished: false, temps: null
+            crossings: track.closed ? -1 : 0, moves: 0, crashCount: 0, crashes: [], off: null, finished: false, temps: null
           });
         });
         g.cands = candidatesFor(g, g.players[0]);
@@ -457,14 +525,23 @@
       function applyMove(g, cand) {
         var pl = g.players[g.turn];
         pl.moves++;
-        if (cand.type === 'crash') {
-          pl.crashCount++;
-          pl.crashes.push({ from: pl.pos.slice(), to: [cand.x, cand.y] });
+        if (cand.type === 'stop') {
           pl.v = [0, 0];
         } else {
-          pl.v = [cand.x - pl.pos[0], cand.y - pl.pos[1]];
+          var tr = g.track;
+          pl.v = cand.type === 'exit' ? [0, 0] : [cand.x - pl.pos[0], cand.y - pl.pos[1]];
           pl.pos = [cand.x, cand.y];
           pl.path.push(pl.pos.slice());
+          if (cand.type === 'exit') {
+            // la voiture reste là où elle est arrivée, hors piste ; la zone interdite est la route en aval du point de sortie
+            var sx = arcOf(tr, cand.exit[0], cand.exit[1]);
+            var end = tr.closed ? sx + tr.total / 2 : tr.total;
+            pl.crashCount++;
+            pl.crashes.push({ at: cand.exit.slice() });
+            pl.off = { s: sx, at: cand.exit.slice(), zone: end > sx + 0.5 ? subLine(tr, sx + 0.5, end) : [] };
+          } else if (cand.type === 'reentry') {
+            pl.off = null;
+          }
           if (cand.cross !== 0) {
             pl.crossings += cand.cross;
             if (cand.cross > 0 && pl.crossings >= g.laps && !pl.finished) {
@@ -549,6 +626,24 @@
         function Y(y) { return (y - cam.cy) * s + h / 2; }
         drawTrack(ctx, g.track, cam, w, h, true);
 
+        // zone rouge : pour la voiture dont c'est le tour et qui est hors piste, la route en aval de sa sortie est interdite
+        var curP = g.players[g.turn];
+        if (!g.over && curP.off && curP.off.zone.length > 1) {
+          ctx.save();
+          ctx.lineJoin = 'round'; ctx.lineCap = 'butt';
+          ctx.beginPath();
+          curP.off.zone.forEach(function (p, i) { if (i) ctx.lineTo(X(p[0]), Y(p[1])); else ctx.moveTo(X(p[0]), Y(p[1])); });
+          ctx.strokeStyle = 'rgba(214, 40, 40, .38)'; ctx.lineWidth = g.track.hw * 2 * s; ctx.stroke();
+          // limite : trait rouge en travers de la route, au point de sortie
+          var q0 = pointAt(g.track, curP.off.s - 0.5), q1 = pointAt(g.track, curP.off.s + 0.5);
+          var tx = q1[0] - q0[0], ty = q1[1] - q0[1], tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+          var mx = (q0[0] + q1[0]) / 2, my = (q0[1] + q1[1]) / 2;
+          ctx.beginPath();
+          ctx.moveTo(X(mx - ty * g.track.hw), Y(my + tx * g.track.hw)); ctx.lineTo(X(mx + ty * g.track.hw), Y(my - tx * g.track.hw));
+          ctx.strokeStyle = '#d62828'; ctx.lineWidth = Math.max(3, s * 0.2); ctx.stroke();
+          ctx.restore();
+        }
+
         var dotR = Math.max(2.2, s * 0.13);
         // traces des voitures
         g.players.forEach(function (pl) {
@@ -558,12 +653,9 @@
           ctx.stroke();
           ctx.fillStyle = pl.color;
           pl.path.forEach(function (p) { ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), dotR, 0, 6.283); ctx.fill(); });
-          // sorties de route : trait pointillé et croix
+          // sorties de route : croix à l'endroit où la voiture a quitté la piste
           pl.crashes.forEach(function (c) {
-            ctx.save(); ctx.setLineDash([4, 4]); ctx.globalAlpha = .6;
-            ctx.beginPath(); ctx.moveTo(X(c.from[0]), Y(c.from[1])); ctx.lineTo(X(c.to[0]), Y(c.to[1])); ctx.stroke();
-            ctx.restore();
-            var r = s * 0.2, cx = X(c.to[0]), cy = Y(c.to[1]);
+            var r = s * 0.22, cx = X(c.at[0]), cy = Y(c.at[1]);
             ctx.lineWidth = Math.max(1.8, s * 0.1);
             ctx.beginPath(); ctx.moveTo(cx - r, cy - r); ctx.lineTo(cx + r, cy + r); ctx.moveTo(cx + r, cy - r); ctx.lineTo(cx - r, cy + r); ctx.stroke();
           });
@@ -584,13 +676,19 @@
           g.cands.forEach(function (c) {
             var x = X(c.x), y = Y(c.y), r = Math.max(5, s * 0.3);
             var isSel = sel && sel.x === c.x && sel.y === c.y;
-            if (c.type === 'blocked') {
+            if (c.type === 'illegal') {
+              ctx.strokeStyle = 'rgba(214, 40, 40, .6)'; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.arc(x, y, r * 0.75, 0, 6.283); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(x - r * .5, y + r * .5); ctx.lineTo(x + r * .5, y - r * .5); ctx.stroke();
+              return;
+            }
+            if (c.type === 'blocked' || c.type === 'toofast') {
               ctx.strokeStyle = 'rgba(60,60,70,.55)'; ctx.lineWidth = 2;
               ctx.beginPath(); ctx.arc(x, y, r * 0.75, 0, 6.283); ctx.stroke();
               ctx.beginPath(); ctx.moveTo(x - r * .5, y - r * .5); ctx.lineTo(x + r * .5, y + r * .5); ctx.stroke();
               return;
             }
-            if (c.type === 'crash') {
+            if (c.type === 'exit') {
               ctx.strokeStyle = isSel ? '#c1272d' : 'rgba(193, 39, 45, .75)'; ctx.lineWidth = isSel ? 3.4 : 2;
               ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, 6.283);
               if (isSel) { ctx.fillStyle = 'rgba(193, 39, 45, .25)'; ctx.fill(); }
@@ -604,14 +702,14 @@
             if (c.cross > 0) { ctx.fillStyle = isSel ? '#fff' : cur.color; ctx.font = 'bold ' + Math.round(r * 1.1) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⚑', x, y + 1); }
           });
           if (sel) {
-            ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = sel.type === 'crash' ? '#c1272d' : cur.color; ctx.lineWidth = 2.4;
+            ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = sel.type === 'exit' ? '#c1272d' : cur.color; ctx.lineWidth = 2.4;
             ctx.beginPath(); ctx.moveTo(X(cur.pos[0]), Y(cur.pos[1])); ctx.lineTo(X(sel.x), Y(sel.y)); ctx.stroke(); ctx.restore();
           }
         }
         // voitures (gros point cerclé)
         g.players.forEach(function (pl) {
           var x = X(pl.pos[0]), y = Y(pl.pos[1]), r = Math.max(5, s * 0.27);
-          if (pl === cur && !g.over) { ctx.beginPath(); ctx.arc(x, y, r + 5, 0, 6.283); ctx.strokeStyle = pl.color; ctx.globalAlpha = .35; ctx.lineWidth = 3; ctx.stroke(); ctx.globalAlpha = 1; }
+          if (pl === cur && !g.over) { ctx.beginPath(); ctx.arc(x, y, r + (s < 12 ? 9 : 5), 0, 6.283); ctx.strokeStyle = pl.color; ctx.globalAlpha = s < 12 ? .6 : .35; ctx.lineWidth = 3; ctx.stroke(); ctx.globalAlpha = 1; }
           ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fillStyle = pl.color; ctx.fill();
           ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
         });
@@ -751,17 +849,26 @@
         var pl = game.players[game.turn];
         $('whoDot').style.background = pl.color;
         $('whoName').textContent = pl.name;
-        $('speed').innerHTML = '';
+        $('speed').textContent = '';
         var b = document.createElement('b');
-        b.textContent = '(' + pl.v[0] + ', ' + pl.v[1] + ')';
+        b.textContent = fmtSpeed(pl.v) + ' c/t';
         $('speed').appendChild(document.createTextNode('Vitesse '));
         $('speed').appendChild(b);
         $('ok').disabled = true; $('ok').textContent = 'Valider';
-        setStatus('Touchez le point où vous voulez arriver, puis Valider.');
+        if (pl.off) setStatus('Hors piste ! Manœuvrez (2 c/t maxi) et rentrez sur la route en amont de la zone rouge.', true);
+        else setStatus('Touchez la carte pour zoomer et jouer votre tour.');
+        // chaque tour commence par la vue d'ensemble ; un toucher amène à la vue zoomée pour jouer
+        overview = true;
+        $('view').classList.add('on'); $('view').textContent = 'Suivre';
         renderChips();
         computeTarget();
         if (!animate) snapCam();
         requestDraw();
+      }
+      // vitesse = longueur du vecteur, en carreaux par tour (c/t)
+      function fmtSpeed(v) {
+        var n = Math.round(Math.hypot(v[0], v[1]) * 10) / 10;
+        return String(n).replace('.', ',');
       }
       function setStatus(t, warn) { var e = $('status'); e.textContent = t; e.className = 'status' + (warn ? ' warn' : ''); }
       function renderChips() {
@@ -783,7 +890,6 @@
         var names = [];
         for (var i = 0; i < settings.players; i++) names.push((settings.names[i] || '').trim() || ('Joueur ' + (i + 1)));
         game = newGame(tr, settings.laps, names);
-        overview = false; $('view').textContent = 'Vue d’ensemble'; $('view').classList.remove('on');
         show('play');
         beginTurn(false);
       }
@@ -793,7 +899,7 @@
         var wx = (clientX - r.left - W / 2) / cam.s + cam.cx, wy = (clientY - r.top - H / 2) / cam.s + cam.cy;
         var best = null, bd = 1.15;
         game.cands.forEach(function (c) {
-          if (c.type === 'blocked') return;
+          if (!SELECTABLE[c.type]) return;
           var d = Math.hypot(c.x - wx, c.y - wy);
           if (d < bd) { bd = d; best = c; }
         });
@@ -808,13 +914,18 @@
         if (selected && selected.x === c.x && selected.y === c.y) { commit(); return; }
         selected = c;
         $('ok').disabled = false;
-        if (c.type === 'crash') {
+        var me = game.players[game.turn];
+        var nv = [c.x - me.pos[0], c.y - me.pos[1]];
+        var flag = c.cross > 0 ? ' — ligne d’arrivée franchie !' : '';
+        if (c.type === 'exit') {
           $('ok').textContent = 'Valider (sortie)';
-          setStatus('Hors piste : vous perdrez ce tour et repartirez à l’arrêt de votre point actuel.', true);
+          setStatus('Sortie de route : vous finirez hors piste, vitesse nulle. Ensuite 2 c/t maxi pour rentrer en amont.', true);
+        } else if (c.type === 'stop') {
+          $('ok').textContent = 'Valider';
+          setStatus('Aucun point jouable : vous vous arrêtez sur place.');
         } else {
           $('ok').textContent = 'Valider';
-          var nv = [c.x - game.players[game.turn].pos[0], c.y - game.players[game.turn].pos[1]];
-          setStatus('Nouvelle vitesse (' + nv[0] + ', ' + nv[1] + ')' + (c.cross > 0 ? ' — ligne d’arrivée franchie !' : '') + '. Valider pour jouer.');
+          setStatus((c.type === 'reentry' ? 'Retour sur la route. ' : '') + 'Nouvelle vitesse ' + fmtSpeed(nv) + ' c/t' + flag + '. Valider pour jouer.');
         }
         requestDraw();
       });
@@ -831,7 +942,6 @@
         var c = selected;
         applyMove(game, c);
         if (game.over) { finishGame(); return; }
-        if (overview) setOverview(false);
         beginTurn(true);
       }
       $('ok').addEventListener('click', commit);
@@ -925,7 +1035,7 @@
       $('go').addEventListener('click', startGame);
 
       // Pour les tests automatiques
-      window.__course = { TRACKS: TRACKS, prepared: TRACK_BY_ID, onRoad: onRoad, startPositions: startPositions, newGame: newGame, applyMove: applyMove, candidatesFor: candidatesFor, resolveMove: resolveMove, ranking: ranking, get game() { return game; } };
+      window.__course = { distToTrack: distToTrack, arcOf: arcOf, wrapDiff: wrapDiff, fmtSpeed: fmtSpeed, TRACKS: TRACKS, prepared: TRACK_BY_ID, onRoad: onRoad, startPositions: startPositions, newGame: newGame, applyMove: applyMove, candidatesFor: candidatesFor, resolveMove: resolveMove, ranking: ranking, get game() { return game; } };
 
       DB.showErrors();
       DB.gate({ section: 'course', mount: $('gate') });
