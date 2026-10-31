@@ -488,6 +488,7 @@
         var End = { x: sx + ux * dist, y: sy + uy * dist }, nearest = -1, nd = Infinity;
         for (k = 0; k < M.players.length; k++) {
           var q = M.players[k], d = Math.hypot(q.x - End.x, q.y - End.y);
+          if (skipNear && q.team !== S.team && Math.hypot(q.x - sx, q.y - sy) <= MARK_R) continue;   // déjà battu au duel de départ
           // à égalité, le ballon va à l'adversaire du tireur
           if (d < nd - 1e-9 || (Math.abs(d - nd) <= 1e-9 && q.team !== S.team)) { nd = d; nearest = k; }
         }
@@ -1039,7 +1040,7 @@
         else if (out.type === 'stop') to = out.at;
         else to = out.at;
         M.phase = 'fly';
-        var fin = function () { finishShot(out, shooterTeam); };
+        var fin = function () { finishShot(out, shooterTeam, afterDuel ? from : null); };
         if (FAST) { fin(); return; }
         var len = Math.hypot(to.x - from.x, to.y - from.y);
         anim = { t0: performance.now(), dur: 220 + len * 11, from: from, to: to, done: fin };
@@ -1119,8 +1120,13 @@
         }, 1400);
       }
 
-      function finishShot(out, shooterTeam) {
+      function finishShot(out, shooterTeam, origin) {
         var duel = findDuel(M, out);
+        // Duel de départ déjà joué : aucun autre duel dans cette zone, le ballon arrive comme s'il avait été tiré normalement.
+        if (duel && origin) {
+          var cx = out.type === 'stop' ? out.at.x : M.players[out.idx].x, cy = out.type === 'stop' ? out.at.y : M.players[out.idx].y;
+          if (Math.hypot(cx - origin.x, cy - origin.y) <= MARK_R * 2) duel = null;
+        }
         if (duel) {
           runDuel(out, shooterTeam, duel, function () {
             var wi = out.type === 'stop' ? out.nearest : out.idx, p = M.players[wi];
