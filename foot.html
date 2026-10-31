@@ -328,6 +328,8 @@
     </ul>
     <h4>Le tir</h4>
     <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir ; vous pouvez aussi changer d’avis en glissant le doigt dans la bande rouge « annuler » avant de relâcher. Le résultat reste secret jusqu’à l’arrivée du ballon : rien n’indique si la passe ou le tir réussira. Après un tir, c’est à l’autre joueur de jouer.</p>
+    <h4>Portée et précision</h4>
+    <p>La portée maximale est de 40, moins que la moitié du terrain (45) : on ne peut pas marquer depuis le rond central. Plus un tir est puissant, moins il est précis : le ballon dévie légèrement, au hasard, de la direction visée. La déviation typique (écart-type) est d’environ 0,5° pour une passe courte, 2° à mi-puissance et 7° à pleine puissance ; la portée varie aussi un peu (jusqu’à 5 % à pleine puissance). Un cône clair, sur le terrain, montre la zone où le ballon peut finir (± 2 écarts-types) : plus il est large, plus le tir est risqué. Une passe courte est presque sûre, un tir de loin est une loterie.</p>
     <h4>Le ballon en route</h4>
     <ul>
       <li><b>Un coéquipier sur le trajet</b> (à moins de 3 de la trajectoire) reçoit la passe : le ballon s’arrête sur lui.</li>
@@ -371,7 +373,15 @@
       var INTERCEPT_R = 5;      // un adversaire à moins de 5 de la trajectoire peut tenter d'intercepter (dé)
       var NEAR_R = 10;          // un ballon qui s'arrête est pris par le joueur le plus proche dans ce rayon, sinon il reste libre
       var SEP = 1;              // deux joueurs ne peuvent pas être (quasi) au même endroit
-      var MAX_DIST = 75;       // portée maximale d'un tir
+      var MAX_DIST = 40;       // portée maximale d'un tir : moins que la moitié du terrain (impossible de marquer depuis le rond central)
+      // Précision : plus le tir est puissant, moins il est précis. Écart-type de l'angle (en degrés) selon la puissance p (0..1) :
+      // 0,5° pour une passe courte, 2° à mi-puissance, 7° à fond ; la portée varie aussi de ±5 % × p. Tirages limités à ±2 écarts-types.
+      function spreadDeg(p) { return 0.5 + 6.5 * p * p; }
+      function gauss() {
+        if (window.__FOOT_NOSPREAD) return 0;
+        var u = Math.random() || 1e-9, v = Math.random();
+        return Math.max(-2, Math.min(2, Math.sqrt(-2 * Math.log(u)) * Math.cos(6.283185307 * v)));
+      }
       var MIN_SHOT = 4;        // un tir plus court est annulé
       var OPP_DIST = 6;        // adversaires à 6 au moins du ballon lors d'une touche, d'un corner…
       var EDGE = 1.5;          // marge de placement le long des lignes
@@ -809,6 +819,13 @@
         if (sh) {
           var h2 = M.players[M.holder], col = COLORS[h2.team];
           var tipx = h2.x + sh.ux * sh.dist, tipy = h2.y + sh.uy * sh.dist;
+          // cône de précision : la zone où le ballon peut dévier (±2 écarts-types) s'élargit avec la puissance
+          var sp2 = spreadDeg(sh.power) * 2 * Math.PI / 180, a0 = Math.atan2(sh.uy, sh.ux);
+          ctx.save(); ctx.fillStyle = 'rgba(255,255,255,.13)';
+          ctx.beginPath(); ctx.moveTo(X(h2.x), Y(h2.y));
+          ctx.lineTo(X(h2.x + Math.cos(a0 - sp2) * sh.dist), Y(h2.y + Math.sin(a0 - sp2) * sh.dist));
+          ctx.lineTo(X(h2.x + Math.cos(a0 + sp2) * sh.dist), Y(h2.y + Math.sin(a0 + sp2) * sh.dist));
+          ctx.closePath(); ctx.fill(); ctx.restore();
           ctx.save(); ctx.lineCap = 'round';
           P.pen(ctx, [[h2.x, h2.y], [tipx, tipy]], false, X, Y, S, col, Math.max(3, S * 0.5));
           var ang = Math.atan2(sh.uy, sh.ux), hl = 2.6;
@@ -1080,6 +1097,9 @@
       function doShoot(ux, uy, dist, afterDuel) {
         if (!canShoot(M)) return;
         var si = M.holder, shooterTeam = M.players[si].team;
+        // imprécision du tir (secrète) : le ballon dévie un peu de la direction visée
+        var pw = Math.min(1, dist / MAX_DIST), an = Math.atan2(uy, ux) + gauss() * spreadDeg(pw) * Math.PI / 180;
+        ux = Math.cos(an); uy = Math.sin(an); dist = dist * (1 + gauss() * 0.05 * pw);
         var out = resolveShot(M, si, ux, uy, dist, true);
         var from = { x: M.players[si].x, y: M.players[si].y }, cur = from, passes = out.passes || [];
         M.phase = 'fly';
@@ -1282,7 +1302,7 @@
       // Pour les tests automatiques
       window.__foot = {
         get M() { return M; }, newMatch: newMatch, startRestart: startRestart, checkPlacement: checkPlacement, placePlayer: placePlayer,
-        resolveShot: resolveShot, applyOutcome: applyOutcome, movePlayer: movePlayer, checkMove: checkMove, interceptNeed: interceptNeed, computePasses: computePasses, findDuel: findDuel, resolveDuel: resolveDuel, mustShoot: mustShoot, canShoot: canShoot, constants: { PW: PW, PH: PH, GX0: GX0, GX1: GX1, CC_R: CC_R, R_CATCH: R_CATCH },
+        resolveShot: resolveShot, applyOutcome: applyOutcome, movePlayer: movePlayer, checkMove: checkMove, interceptNeed: interceptNeed, spreadDeg: spreadDeg, MAX_DIST: MAX_DIST, computePasses: computePasses, findDuel: findDuel, resolveDuel: resolveDuel, mustShoot: mustShoot, canShoot: canShoot, constants: { PW: PW, PH: PH, GX0: GX0, GX1: GX1, CC_R: CC_R, R_CATCH: R_CATCH },
         toScreen: function (x, y) { var r = cv.getBoundingClientRect(); return { x: r.left + (x - 30) * S + W / 2, y: r.top + (y - 45) * S + H / 2 }; },
         get scale() { return S; }
       };
