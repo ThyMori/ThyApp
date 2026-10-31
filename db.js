@@ -22,6 +22,7 @@
   var SECTIONS = [
     { id: 'jeu-de-la-vie', label: 'Jeu de la vie' },
     { id: 'course', label: 'Course' },
+    { id: 'football', label: 'Football' },
     { id: 'spectacles', label: 'Spectacles' }
   ];
   // Partie qui commande l'accès à chaque base (users : réservé aux administrateurs).
