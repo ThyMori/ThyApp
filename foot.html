@@ -444,12 +444,13 @@
 
       // Trajet du ballon : part du tireur, direction (ux, uy) unitaire, longueur dist.
       // Résultat : catch (saisi), goal, out (touche / corner / sortie de but) ou stop (arrêt libre).
-      function resolveShot(M, si, ux, uy, dist) {
-        var r = resolveShot0(M, si, ux, uy, dist);
+      // skipNear : après un duel de départ gagné, les adversaires de la zone du tireur ne peuvent plus intercepter (le duel ne se rejoue pas).
+      function resolveShot(M, si, ux, uy, dist, skipNear) {
+        var r = resolveShot0(M, si, ux, uy, dist, skipNear);
         r.shooter = si;
         return r;
       }
-      function resolveShot0(M, si, ux, uy, dist) {
+      function resolveShot0(M, si, ux, uy, dist, skipNear) {
         var S = M.players[si], sx = S.x, sy = S.y, k;
         // sortie du terrain (distance parcourue jusqu'à la ligne)
         var ex = Infinity, side = null;
@@ -460,6 +461,7 @@
         var best = Infinity, who = -1;
         for (k = 0; k < M.players.length; k++) {
           if (k === si) continue;
+          if (skipNear && M.players[k].team !== S.team && Math.hypot(M.players[k].x - sx, M.players[k].y - sy) <= MARK_R) continue;
           var o = M.players[k], wx = o.x - sx, wy = o.y - sy;
           var proj = wx * ux + wy * uy, perp = Math.abs(wx * uy - wy * ux);
           if (perp > R_CATCH) continue;
@@ -1020,17 +1022,17 @@
           var o0 = { type: 'depart' };
           M.phase = 'fly';
           runDuel(o0, team0, dd, function () {
-            if (M.players[o0.idx].team === team0) { M.phase = 'aim'; doShoot(ux, uy, dist); }
+            if (M.players[o0.idx].team === team0) { M.phase = 'aim'; doShoot(ux, uy, dist, true); }
             else finishShot2({ type: 'catch', idx: o0.idx, shooter: si0, tackled: true }, team0);
           });
           return;
         }
-        doShoot(ux, uy, dist);
+        doShoot(ux, uy, dist, false);
       }
-      function doShoot(ux, uy, dist) {
+      function doShoot(ux, uy, dist, afterDuel) {
         if (!canShoot(M)) return;
         var si = M.holder, shooterTeam = M.players[si].team;
-        var out = resolveShot(M, si, ux, uy, dist);
+        var out = resolveShot(M, si, ux, uy, dist, afterDuel);
         var from = { x: M.players[si].x, y: M.players[si].y };
         var to;
         if (out.type === 'catch') to = { x: M.players[out.idx].x, y: M.players[out.idx].y };
@@ -1086,6 +1088,7 @@
       function sum(a) { return a.reduce(function (x, y) { return x + y; }, 0); }
       function setWinner(out, d) { if (out.type === 'stop') out.nearest = d.idx; else out.idx = d.idx; out.duel = d; }
       function runDuel(out, shooterTeam, duel, done) {
+        window.__FOOT_DUELS = (window.__FOOT_DUELS || 0) + 1;   // compteur (tests)
         var red = [], blue = [], k;
         for (k = 0; k < duel.n[1]; k++) red.push(rollValue());      // rouges tirés d'abord (tests : __FOOT_ROLLS)
         for (k = 0; k < duel.n[0]; k++) blue.push(rollValue());
