@@ -181,6 +181,20 @@
       animation: pop .25s ease-out; white-space: pre-line;
     }
     @keyframes pop { from { transform: translate(-50%, -50%) scale(.85); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+    /* ---------- Dés ---------- */
+    .dice { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 12, 8, .62); pointer-events: none; animation: fade .2s ease-out; }
+    @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+    .dicebox { text-align: center; padding: 14px 18px; }
+    .dicetitle { font-family: var(--mono); font-size: 10.5px; letter-spacing: .26em; text-transform: uppercase; color: #e7e3d8; margin-bottom: 18px; }
+    .dicerow { display: flex; gap: 46px; justify-content: center; }
+    .diewrap { perspective: 520px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+    .diewrap small { font-family: var(--serif); font-size: 15px; color: #e7e3d8; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .die { width: 64px; height: 64px; position: relative; transform-style: preserve-3d; }
+    .face { position: absolute; inset: 0; border-radius: 11px; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 9px; backface-visibility: hidden; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .35), inset 0 -6px 10px rgba(0, 0, 0, .22); }
+    .die.blue .face { background: #3a6ee0; }
+    .die.red .face { background: #dd4545; }
+    .pip { width: 11px; height: 11px; border-radius: 50%; background: #fff; align-self: center; justify-self: center; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, .25); }
+    .diceres { margin-top: 20px; min-height: 2.6em; font-family: var(--serif); font-size: 20px; line-height: 1.25; color: #fff; }
     .bottom { display: flex; flex-wrap: wrap; gap: 8px 10px; min-height: 52px; align-items: center; }
     .bottom button { flex: 1 1 0; }
     .bottom button.primary { flex: 2 1 0; }
@@ -233,7 +247,7 @@
           </div>
           <ul class="rules">
             <li>À tour de rôle : tirer si l’on a le ballon, ou déplacer un de ses joueurs (10 maxi).</li>
-            <li>Le ballon se colle au premier joueur qu’il frôle, de l’une ou l’autre équipe.</li>
+            <li>Le ballon se colle au premier joueur qu’il frôle ; s’il est marqué, duel de dés.</li>
             <li>Un but consomme un ballon. Quand il n’y en a plus, le match est terminé.</li>
             <li>Le bouton « i » en haut à droite donne toutes les règles.</li>
           </ul>
@@ -253,6 +267,16 @@
           <div class="stage" id="stage">
             <canvas id="cv" aria-label="Terrain de football vu de dessus" role="img"></canvas>
             <div class="banner" id="banner" hidden></div>
+            <div class="dice" id="dice" hidden aria-live="polite">
+              <div class="dicebox">
+                <p class="dicetitle" id="diceTitle"></p>
+                <div class="dicerow">
+                  <div class="diewrap"><div class="die blue" id="die0"></div><small id="dieName0"></small></div>
+                  <div class="diewrap"><div class="die red" id="die1"></div><small id="dieName1"></small></div>
+                </div>
+                <p class="diceres" id="diceRes"></p>
+              </div>
+            </div>
           </div>
           <div class="bottom" id="bottom">
             <p class="hint" id="hint"></p>
@@ -295,7 +319,9 @@
       <li>Si vous avez déplacé un joueur à votre tour précédent et que vous avez le ballon, vous êtes obligé de tirer.</li>
     </ul>
     <h4>Le tir</h4>
-    <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir. Le ballon se colle au premier joueur qu’il frôle (à moins de 3), de l’une ou l’autre équipe. S’il ne frôle personne, il s’arrête au bout de la flèche et le joueur le plus proche le prend. Après un tir, c’est à l’autre joueur de jouer.</p>
+    <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir. Le résultat reste secret jusqu’à l’arrivée du ballon : rien n’indique si la passe ou le tir réussira. Le ballon se colle au premier joueur qu’il frôle (à moins de 3), de l’une ou l’autre équipe. S’il ne frôle personne, il s’arrête au bout de la flèche et le joueur le plus proche le prend. Après un tir, c’est à l’autre joueur de jouer.</p>
+    <h4>Le duel</h4>
+    <p>Un joueur est « marqué » quand un adversaire est à moins de 3 de lui. Si le ballon arrive sur un joueur marqué, deux dés sont lancés à l’écran, un bleu et un rouge. Le plus grand gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au joueur qui marquait). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie.</p>
     <h4>Les sorties de terrain</h4>
     <ul>
       <li>Sur le côté : touche pour l’adversaire de celui qui a tiré.</li>
@@ -490,6 +516,24 @@
         return { goal: false, restart: true };
       }
 
+      // Un joueur est « marqué » si un joueur de l'équipe adverse est à moins de 3 de lui : il y a alors un duel de dés.
+      var MARK_R = 3;
+      function findDuel(M, out) {
+        if (!out || out.type !== 'catch') return null;
+        var c = M.players[out.idx], best = -1, bd = Infinity;
+        M.players.forEach(function (p, i) {
+          if (p.team === c.team || !p.placed) return;
+          var d = Math.hypot(p.x - c.x, p.y - c.y);
+          if (d < MARK_R && d < bd) { bd = d; best = i; }
+        });
+        return best < 0 ? null : { catcher: out.idx, marker: best };
+      }
+      // dé bleu = équipe 0, dé rouge = équipe 1. Le plus grand gagne ; à égalité, l'équipe du tireur l'emporte (la passe réussit).
+      function resolveDuel(M, shooterTeam, duel, blue, red) {
+        var ct = M.players[duel.catcher].team;
+        var winnerTeam = blue > red ? 0 : red > blue ? 1 : shooterTeam;
+        return { winnerTeam: winnerTeam, idx: winnerTeam === ct ? duel.catcher : duel.marker, blue: blue, red: red };
+      }
       function holderTeam(M) { return M.players[M.holder].team; }
       function currentActor(M) { return M.phase === 'place' ? M.players[M.queue[0]].team : M.phase === 'aim' ? M.turn : -1; }
 
@@ -696,32 +740,16 @@
           var onHolder = !ballShown && M.phase !== 'goal';
           drawBall(b.x + (onHolder ? 1.7 : 0), b.y + (onHolder ? 1.1 : 0));
         }
-        // flèche de visée
+        // flèche de visée : direction et portée seulement. Le résultat (passe, interception, but, sortie) reste secret.
         var sh = (M.phase === 'aim' && !anim && mode === 'shoot') ? aimShot() : null;
         if (sh) {
           var h2 = M.players[M.holder], col = COLORS[h2.team];
-          var out = resolveShot(M, M.holder, sh.ux, sh.uy, sh.dist);
           var tipx = h2.x + sh.ux * sh.dist, tipy = h2.y + sh.uy * sh.dist;
-          if (out.type === 'catch' || out.type === 'goal' || out.type === 'out') { tipx = h2.x + sh.ux * out.dist; tipy = h2.y + sh.uy * out.dist; }
-          ctx.save(); ctx.setLineDash([2, 7]);
-          P.pen(ctx, [[h2.x, h2.y], [h2.x + sh.ux * sh.dist, h2.y + sh.uy * sh.dist]], false, X, Y, S, 'rgba(255,255,255,.55)', Math.max(1.6, S * 0.28));
-          ctx.restore();
           ctx.save(); ctx.lineCap = 'round';
           P.pen(ctx, [[h2.x, h2.y], [tipx, tipy]], false, X, Y, S, col, Math.max(3, S * 0.5));
           var ang = Math.atan2(sh.uy, sh.ux), hl = 2.6;
           P.pen(ctx, [[tipx - Math.cos(ang - 0.45) * hl, tipy - Math.sin(ang - 0.45) * hl], [tipx, tipy], [tipx - Math.cos(ang + 0.45) * hl, tipy - Math.sin(ang + 0.45) * hl]], false, X, Y, S, col, Math.max(3, S * 0.5));
           ctx.restore();
-          // ce que la flèche va donner
-          if (out.type === 'catch') {
-            var cp = M.players[out.idx];
-            P.penCircle(ctx, cp.x, cp.y, R_BODY + 1.4, X, Y, S, cp.team === h2.team ? '#ffffff' : '#ffd23f', Math.max(2, S * 0.4));
-          } else if (out.type === 'goal') {
-            ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.round(S * 2.2) + 'px ui-sans-serif, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText('BUT !', X(30), Y(out.at.y < 45 ? 4 : PH - 4));
-          } else if (out.type === 'out') {
-            ctx.strokeStyle = '#ffd0d0'; ctx.lineWidth = 3; var ox = X(out.at.x), oy = Y(out.at.y), q2 = S * 1.2;
-            ctx.beginPath(); ctx.moveTo(ox - q2, oy - q2); ctx.lineTo(ox + q2, oy + q2); ctx.moveTo(ox + q2, oy - q2); ctx.lineTo(ox - q2, oy + q2); ctx.stroke();
-          }
           ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.max(10, Math.round(S * 1.7)) + 'px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText(Math.round(sh.power * 100) + ' %', X(h2.x), Y(h2.y) + R_BODY * S + S * 2.2);
         }
@@ -940,7 +968,74 @@
         redraw();
       }
 
+      // Dés : lancer physique à l'écran (cubes en 3D qui roulent puis s'immobilisent sur leur face).
+      var PIPS = { 1: [5], 2: [1, 9], 3: [1, 5, 9], 4: [1, 3, 7, 9], 5: [1, 3, 5, 7, 9], 6: [1, 3, 4, 6, 7, 9] };
+      var FACE_T = { 1: 'rotateY(0deg)', 6: 'rotateY(180deg)', 3: 'rotateY(90deg)', 4: 'rotateY(-90deg)', 2: 'rotateX(90deg)', 5: 'rotateX(-90deg)' };
+      var SHOW = { 1: [0, 0], 6: [0, 180], 3: [0, -90], 4: [0, 90], 2: [-90, 0], 5: [90, 0] };   // [rotateX, rotateY] qui amènent la face devant
+      function buildDie(el) {
+        el.textContent = '';
+        for (var n = 1; n <= 6; n++) {
+          var f = document.createElement('div'); f.className = 'face';
+          f.style.transform = FACE_T[n] + ' translateZ(32px)';
+          for (var c = 1; c <= 9; c++) { var cell = document.createElement('span'); if (PIPS[n].indexOf(c) >= 0) cell.className = 'pip'; f.appendChild(cell); }
+          el.appendChild(f);
+        }
+      }
+      buildDie($('die0')); buildDie($('die1'));
+      function rollValue() {
+        var q = window.__FOOT_ROLLS;
+        if (q && q.length) return q.shift();
+        return 1 + Math.floor(Math.random() * 6);
+      }
+      function throwDie(el, value, delay, dir) {
+        var sh = SHOW[value], rz = (Math.random() * 16 - 8);
+        var spinX = 360 * (2 + Math.floor(Math.random() * 2)), spinY = 360 * (1 + Math.floor(Math.random() * 2));
+        function T(x, y, z, rx, ry, rzz, sc) { return 'translate3d(' + x + 'px,' + y + 'px,' + z + 'px) rotateX(' + rx + 'deg) rotateY(' + ry + 'deg) rotateZ(' + rzz + 'deg) scale(' + sc + ')'; }
+        var final = T(0, 0, 0, sh[0], sh[1], rz, 1);
+        if (!el.animate) { el.style.transform = final; return; }
+        el.animate([
+          { transform: T(dir * -150, -120, 80, sh[0] - spinX, sh[1] - spinY, 0, 0.6), offset: 0 },
+          { transform: T(dir * -60, 14, 40, sh[0] - spinX * 0.5, sh[1] - spinY * 0.55, rz * 0.5, 1.12), offset: 0.45, easing: 'ease-in' },
+          { transform: T(dir * -18, -34, 20, sh[0] - spinX * 0.2, sh[1] - spinY * 0.2, rz, 1.05), offset: 0.68, easing: 'ease-out' },
+          { transform: final, offset: 1, easing: 'ease-in' }
+        ], { duration: 1500, delay: delay, fill: 'both', easing: 'cubic-bezier(.25,.6,.4,1)' });
+        el.style.transform = final;
+      }
+      function runDuel(out, shooterTeam, duel, done) {
+        var blue = rollValue(), red = rollValue();
+        // l'ordre des tirages est (rouge, bleu) dans __FOOT_ROLLS : on lit rouge d'abord
+        var tmp = blue; blue = red; red = tmp;
+        var d = resolveDuel(M, shooterTeam, duel, blue, red);
+        var c = M.players[duel.catcher], mk = M.players[duel.marker];
+        var msg = 'Rouge ' + d.red + ' – Bleu ' + d.blue + ' : ' + (d.blue === d.red ? 'égalité, la passe est réussie. ' : '') + nameOf(d.winnerTeam) + ' gagne le duel';
+        if (FAST) { out.idx = d.idx; out.duel = d; done(); return; }
+        $('dieName0').textContent = nameOf(0); $('dieName1').textContent = nameOf(1);
+        $('diceTitle').textContent = 'Duel : n°' + c.num + ' ' + nameOf(c.team) + ' contre n°' + mk.num + ' ' + nameOf(mk.team);
+        $('diceRes').textContent = '';
+        $('dice').hidden = false;
+        throwDie($('die0'), d.blue, 0, 1);
+        throwDie($('die1'), d.red, 140, -1);
+        setStatus('Duel de dés…');
+        setTimeout(function () {
+          $('diceRes').textContent = msg;
+          setStatus(msg);
+          setTimeout(function () { $('dice').hidden = true; out.idx = d.idx; out.duel = d; done(); }, 1700);
+        }, 1700);
+      }
+
       function finishShot(out, shooterTeam) {
+        var duel = findDuel(M, out);
+        if (duel) {
+          runDuel(out, shooterTeam, duel, function () {
+            var p = M.players[out.idx];
+            if (out.idx !== duel.catcher) { M.ball = { x: p.x, y: p.y }; }
+            finishShot2(out, shooterTeam);
+          });
+          return;
+        }
+        finishShot2(out, shooterTeam);
+      }
+      function finishShot2(out, shooterTeam) {
         var res = applyOutcome(M, out);
         M.lastEvent = out;
         if (res.goal) {
@@ -1005,7 +1100,7 @@
       // Pour les tests automatiques
       window.__foot = {
         get M() { return M; }, newMatch: newMatch, startRestart: startRestart, checkPlacement: checkPlacement, placePlayer: placePlayer,
-        resolveShot: resolveShot, applyOutcome: applyOutcome, movePlayer: movePlayer, checkMove: checkMove, mustShoot: mustShoot, canShoot: canShoot, constants: { PW: PW, PH: PH, GX0: GX0, GX1: GX1, CC_R: CC_R, R_CATCH: R_CATCH },
+        resolveShot: resolveShot, applyOutcome: applyOutcome, movePlayer: movePlayer, checkMove: checkMove, findDuel: findDuel, resolveDuel: resolveDuel, mustShoot: mustShoot, canShoot: canShoot, constants: { PW: PW, PH: PH, GX0: GX0, GX1: GX1, CC_R: CC_R, R_CATCH: R_CATCH },
         toScreen: function (x, y) { var r = cv.getBoundingClientRect(); return { x: r.left + (x - 30) * S + W / 2, y: r.top + (y - 45) * S + H / 2 }; },
         get scale() { return S; }
       };
