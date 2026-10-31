@@ -315,9 +315,9 @@
   <dialog id="rules" aria-labelledby="rulesTitle">
     <h3 id="rulesTitle">Règles du jeu</h3>
     <h4>Le principe</h4>
-    <p>Deux joueurs, une équipe de cinq joueurs de champ chacun, un seul ballon à la fois. Le joueur bleu attaque le but du haut, le rouge celui du bas. Un but fait gagner un point et consomme un ballon : quand tous les ballons choisis ont été joués, le match est terminé et celui qui a marqué le plus de buts gagne.</p>
+    <p>Deux joueurs, une équipe de cinq joueurs de champ chacun, un seul ballon à la fois. Le joueur bleu attaque le but du haut, le rouge celui du bas. Un but fait gagner un point et consomme un ballon : quand tous les ballons choisis ont été joués, le match est terminé et celui qui a marqué le plus de buts gagne. Le hasard intervient par des dés lancés à l’écran (duels et interceptions, expliqués plus bas).</p>
     <h4>L’engagement</h4>
-    <p>Le sort désigne qui engage. Son joueur n°1 est posé au centre avec le ballon. Puis on place les autres à tour de rôle, chacun dans sa moitié de terrain : l’adversaire place son n°1, celui qui engage son n°2, l’adversaire son n°2, et ainsi de suite jusqu’aux n°5. Les adversaires restent hors du rond central. Deux joueurs ne peuvent pas être l’un sur l’autre.</p>
+    <p>Le sort désigne qui engage. Son joueur n°1 est posé au centre avec le ballon. Puis on place les autres à tour de rôle, chacun dans sa moitié de terrain : l’adversaire place son n°1, celui qui engage son n°2, l’adversaire son n°2, et ainsi de suite jusqu’aux n°5. Les adversaires restent hors du rond central. Deux joueurs ne peuvent pas être exactement au même endroit, mais ils peuvent être très proches.</p>
     <h4>Un tour de jeu</h4>
     <ul>
       <li>Les joueurs jouent chacun leur tour.</li>
@@ -327,15 +327,23 @@
       <li>Si vous avez déplacé un joueur à votre tour précédent et que vous avez le ballon, vous êtes obligé de tirer.</li>
     </ul>
     <h4>Le tir</h4>
-    <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir ; vous pouvez aussi changer d’avis en glissant le doigt dans la bande rouge « annuler » avant de relâcher. Le résultat reste secret jusqu’à l’arrivée du ballon : rien n’indique si la passe ou le tir réussira. Le ballon se colle au premier joueur qu’il frôle (à moins de 3), de l’une ou l’autre équipe. S’il ne frôle personne, il s’arrête au bout de la flèche et le joueur le plus proche le prend. Après un tir, c’est à l’autre joueur de jouer.</p>
+    <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir ; vous pouvez aussi changer d’avis en glissant le doigt dans la bande rouge « annuler » avant de relâcher. Le résultat reste secret jusqu’à l’arrivée du ballon : rien n’indique si la passe ou le tir réussira. Après un tir, c’est à l’autre joueur de jouer.</p>
+    <h4>Le ballon en route</h4>
+    <ul>
+      <li><b>Un coéquipier sur le trajet</b> (à moins de 3 de la trajectoire) reçoit la passe : le ballon s’arrête sur lui.</li>
+      <li><b>Un adversaire à moins de 5 de la trajectoire</b> peut tenter d’intercepter : un dé de sa couleur est lancé, et il faut atteindre le seuil selon la puissance du tir. 80 % ou plus : il faut un 6. De 60 à 80 % : 5 ou 6. De 40 à 60 % : 4, 5 ou 6. De 20 à 40 % : 3, 4, 5 ou 6. Moins de 20 % : 2 à 6. Un 1 est toujours un échec. Si plusieurs adversaires sont sur le trajet, ils tentent leur chance dans l’ordre où le ballon passe ; au premier qui réussit, le ballon s’arrête sur lui.</li>
+      <li>Les adversaires collés au tireur (à 3 ou moins) ont déjà été affrontés au duel de départ : ils ne tentent pas d’interception.</li>
+      <li><b>Si le ballon s’arrête dans le vide</b>, le joueur le plus proche, dans un rayon de 10, va le chercher et en devient le propriétaire. S’il n’y en a aucun, le ballon reste libre.</li>
+      <li><b>Un ballon libre</b> appartient au premier joueur qui, en se déplaçant, arrive à moins de 3 de lui. Tant que personne ne l’a pris, les deux joueurs ne font que déplacer leurs joueurs.</li>
+    </ul>
     <h4>Le duel</h4>
-    <p>Un joueur est « marqué » quand au moins un adversaire est à 3 unités ou moins de lui. Le duel a lieu d’abord au départ : si le tireur est marqué, il doit gagner son duel pour que la passe ou le tir parte (sinon le marqueur le plus proche lui prend le ballon, et c’est à l’autre de jouer). Il a lieu ensuite à l’arrivée du ballon : sur le joueur qu’il frôle, ou, quand il s’arrête de lui-même, sur le joueur le plus proche qui va le chercher. Si le receveur est marqué, « DUEL ! » s’affiche, puis des dés sont lancés à l’écran : un dé pour le receveur plus un par coéquipier présent dans la zone (soutien), en face un dé par adversaire dans la zone. Bleus = dés bleus, Rouges = dés rouges ; on additionne. La plus grande somme gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au marqueur le plus proche). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie.</p>
+    <p>Un joueur est « marqué » quand au moins un adversaire est à 3 unités ou moins de lui. Le duel a lieu d’abord au départ : si le tireur est marqué, il doit gagner son duel pour que la passe ou le tir parte (sinon le marqueur le plus proche lui prend le ballon, et c’est à l’autre de jouer). Une fois ce duel joué, la zone du tireur est neutre pour ce tour : aucun autre duel ni interception de la part de ces adversaires. Un duel a ensuite lieu à l’arrivée du ballon, si le receveur est marqué (ballon reçu d’un coéquipier, ou ballon arrêté dans le vide et pris par le joueur le plus proche). « DUEL ! » s’affiche, puis des dés sont lancés : un dé pour le receveur plus un par coéquipier présent dans la zone (soutien), en face un dé par adversaire dans la zone. Bleus = dés bleus, Rouges = dés rouges ; on additionne. La plus grande somme gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au marqueur le plus proche). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie. Une interception réussie au dé ne déclenche pas de duel.</p>
     <h4>Les sorties de terrain</h4>
     <ul>
       <li>Sur le côté : touche pour l’adversaire de celui qui a tiré.</li>
       <li>Derrière la ligne de but, hors des poteaux : sortie de but pour la défense si l’attaquant a tiré, corner pour l’adversaire si on a renvoyé le ballon derrière sa propre ligne.</li>
       <li>Avant chaque touche, corner ou sortie de but, les joueurs sont replacés à tour de rôle : l’équipe qui n’a pas le ballon place en premier, un des joueurs de l’autre équipe est déjà sur la ligne avec le ballon. Les adversaires restent à 6 au moins du ballon.</li>
-      <li>Dans le but : un but est marqué, même contre son camp. Après un but, l’équipe qui l’a encaissé engage.</li>
+      <li>Dans le but : un but est marqué, même contre son camp (les adversaires placés sur la trajectoire peuvent encore tenter une interception). Après un but, l’équipe qui l’a encaissé engage.</li>
     </ul>
     <button id="rulesClose" type="button">Compris</button>
   </dialog>
@@ -360,6 +368,9 @@
       var CC_R = 8;            // rond central
       var R_CATCH = 3;         // un joueur saisit le ballon s'il passe à moins de 3
       var R_BODY = 2.1;        // rayon dessiné d'un joueur
+      var INTERCEPT_R = 5;      // un adversaire à moins de 5 de la trajectoire peut tenter d'intercepter (dé)
+      var NEAR_R = 10;          // un ballon qui s'arrête est pris par le joueur le plus proche dans ce rayon, sinon il reste libre
+      var SEP = 1;              // deux joueurs ne peuvent pas être (quasi) au même endroit
       var MAX_DIST = 75;       // portée maximale d'un tir
       var MIN_SHOT = 4;        // un tir plus court est annulé
       var OPP_DIST = 6;        // adversaires à 6 au moins du ballon lors d'une touche, d'un corner…
@@ -398,6 +409,10 @@
       function checkPlacement(M, idx, x, y) {
         var p = M.players[idx], r = M.restart;
         if (x < EDGE || x > PW - EDGE || y < EDGE || y > PH - EDGE) return 'Placez-vous à l’intérieur du terrain.';
+        for (var i = 0; i < M.players.length; i++) {
+          var o = M.players[i];
+          if (i !== idx && o.placed && Math.hypot(o.x - x, o.y - y) < SEP) return 'Il y a déjà un joueur à cet endroit.';
+        }
         if (r.kind === 'kickoff') {
           if (p.team === 0 ? y < PH / 2 + 1 : y > PH / 2 - 1) return 'Au coup d’envoi, restez dans votre moitié de terrain.';
           if (p.team !== r.team && Math.hypot(x - 30, y - 45) < CC_R + 1) return 'Les adversaires restent hors du rond central.';
@@ -429,6 +444,10 @@
         if (mustShoot(M)) return 'Vous avez déplacé un joueur au tour précédent : vous devez tirer.';
         if (Math.hypot(x - p.x, y - p.y) > MOVE_R + 1e-9) return 'Trop loin : 10 maximum.';
         if (x < EDGE || x > PW - EDGE || y < EDGE || y > PH - EDGE) return 'Restez à l’intérieur du terrain.';
+        for (var i = 0; i < M.players.length; i++) {
+          var o = M.players[i];
+          if (i !== idx && o.placed && Math.hypot(o.x - x, o.y - y) < SEP) return 'Il y a déjà un joueur à cet endroit.';
+        }
         return null;
       }
       function movePlayer(M, idx, x, y) {
@@ -437,6 +456,7 @@
         var p = M.players[idx];
         p.x = x; p.y = y;
         if (idx === M.holder) M.ball = { x: x, y: y };
+        else if (M.holder < 0 && Math.hypot(x - M.ball.x, y - M.ball.y) <= R_CATCH + 1e-9) { M.holder = idx; M.ball = { x: x, y: y }; }   // ballon libre récupéré
         M.last[p.team] = 'move';
         M.turn = 1 - p.team;
         return null;
@@ -445,9 +465,24 @@
       // Trajet du ballon : part du tireur, direction (ux, uy) unitaire, longueur dist.
       // Résultat : catch (saisi), goal, out (touche / corner / sortie de but) ou stop (arrêt libre).
       // skipNear : après un duel de départ gagné, les adversaires de la zone du tireur ne peuvent plus intercepter (le duel ne se rejoue pas).
+      // Seuil de dé pour intercepter selon la puissance du tir (un 1 échoue toujours).
+      function interceptNeed(power) { return power >= 0.8 - 1e-9 ? 6 : power >= 0.6 - 1e-9 ? 5 : power >= 0.4 - 1e-9 ? 4 : power >= 0.2 - 1e-9 ? 3 : 2; }
+      // Adversaires passant à moins de 5 de la trajectoire (jusqu'au point où le ballon s'arrête), dans l'ordre de passage.
+      function computePasses(M, si, ux, uy, T, dist) {
+        var S = M.players[si], list = [], need = interceptNeed(dist / MAX_DIST);
+        M.players.forEach(function (o, k) {
+          if (k === si || o.team === S.team || !o.placed) return;
+          if (Math.hypot(o.x - S.x, o.y - S.y) <= MARK_R) return;      // déjà affronté au duel de départ
+          var proj = (o.x - S.x) * ux + (o.y - S.y) * uy, t = Math.max(0, Math.min(T, proj));
+          if (Math.hypot(o.x - (S.x + ux * t), o.y - (S.y + uy * t)) <= INTERCEPT_R + 1e-9) list.push({ idx: k, t: t, need: need });
+        });
+        list.sort(function (a, b) { return a.t - b.t; });
+        return list;
+      }
       function resolveShot(M, si, ux, uy, dist, skipNear) {
-        var r = resolveShot0(M, si, ux, uy, dist, skipNear);
+        var r = resolveShot0(M, si, ux, uy, dist, true);
         r.shooter = si;
+        r.passes = computePasses(M, si, ux, uy, r.dist, dist);
         return r;
       }
       function resolveShot0(M, si, ux, uy, dist, skipNear) {
@@ -461,7 +496,7 @@
         var best = Infinity, who = -1;
         for (k = 0; k < M.players.length; k++) {
           if (k === si) continue;
-          if (skipNear && M.players[k].team !== S.team && Math.hypot(M.players[k].x - sx, M.players[k].y - sy) <= MARK_R) continue;
+          if (M.players[k].team !== S.team) continue;      // les adversaires n'attrapent pas le ballon d'office : ils tentent une interception (dé)
           var o = M.players[k], wx = o.x - sx, wy = o.y - sy;
           var proj = wx * ux + wy * uy, perp = Math.abs(wx * uy - wy * ux);
           if (perp > R_CATCH) continue;
@@ -488,19 +523,24 @@
         var End = { x: sx + ux * dist, y: sy + uy * dist }, nearest = -1, nd = Infinity;
         for (k = 0; k < M.players.length; k++) {
           var q = M.players[k], d = Math.hypot(q.x - End.x, q.y - End.y);
-          if (skipNear && q.team !== S.team && Math.hypot(q.x - sx, q.y - sy) <= MARK_R) continue;   // déjà battu au duel de départ
+          if (q.team !== S.team && Math.hypot(q.x - sx, q.y - sy) <= MARK_R) continue;   // déjà battu au duel de départ
           // à égalité, le ballon va à l'adversaire du tireur
           if (d < nd - 1e-9 || (Math.abs(d - nd) <= 1e-9 && q.team !== S.team)) { nd = d; nearest = k; }
         }
+        if (nearest < 0 || nd > NEAR_R) return { type: 'loose', at: End, dist: dist };      // ballon libre
         return { type: 'stop', at: End, nearest: nearest, dist: dist };
       }
 
       // Applique le résultat. Renvoie { goal: bool, over: bool, restart: bool }.
       function applyOutcome(M, o) {
         var st = o.shooter == null ? null : M.players[o.shooter].team;
-        if (st != null && (o.type === 'catch' || o.type === 'stop')) { M.last[st] = 'shoot'; M.turn = 1 - st; }
+        if (st != null && (o.type === 'catch' || o.type === 'stop' || o.type === 'loose')) { M.last[st] = 'shoot'; M.turn = 1 - st; }
         if (o.type === 'catch') {
           M.holder = o.idx; M.ball = { x: M.players[o.idx].x, y: M.players[o.idx].y }; M.phase = 'aim';
+          return { goal: false };
+        }
+        if (o.type === 'loose') {
+          M.holder = -1; M.ball = { x: Math.max(1, Math.min(PW - 1, o.at.x)), y: Math.max(1, Math.min(PH - 1, o.at.y)) }; M.phase = 'aim';
           return { goal: false };
         }
         if (o.type === 'stop') {
@@ -545,7 +585,7 @@
         var winnerTeam = sb > sr ? 0 : sr > sb ? 1 : shooterTeam;
         return { winnerTeam: winnerTeam, idx: winnerTeam === ct ? duel.catcher : duel.marker, blue: sb, red: sr };
       }
-      function holderTeam(M) { return M.players[M.holder].team; }
+      function holderTeam(M) { return M.holder < 0 ? -1 : M.players[M.holder].team; }
       function currentActor(M) { return M.phase === 'place' ? M.players[M.queue[0]].team : M.phase === 'aim' ? M.turn : -1; }
 
       // ======================================================================
@@ -740,9 +780,13 @@
           }
         }
         // titulaire du ballon
-        if (M.phase === 'aim' && !anim) {
+        if (M.phase === 'aim' && !anim && M.holder >= 0) {
           var h = M.players[M.holder];
           P.penCircle(ctx, h.x, h.y, R_BODY + 1.1, X, Y, S, '#f6b564', Math.max(2, S * 0.4));
+        } else if (M.phase === 'aim' && !anim) {
+          ctx.save(); ctx.setLineDash([4, 6]);
+          P.penCircle(ctx, M.ball.x, M.ball.y, R_CATCH, X, Y, S, 'rgba(246,181,100,.9)', Math.max(1.8, S * 0.3));
+          ctx.restore();
         }
         // fantôme de placement
         if (ghost && M.phase === 'place') {
@@ -757,7 +801,7 @@
         // ballon
         var b = ballShown || M.ball;
         if (M.phase === 'aim' || M.phase === 'place' || anim || M.phase === 'goal') {
-          var onHolder = !ballShown && M.phase !== 'goal';
+          var onHolder = !ballShown && M.phase !== 'goal' && M.holder >= 0;
           drawBall(b.x + (onHolder ? 1.7 : 0), b.y + (onHolder ? 1.1 : 0));
         }
         // flèche de visée : direction et portée seulement. Le résultat (passe, interception, but, sortie) reste secret.
@@ -868,7 +912,9 @@
 
       function statusAim() {
         var t = M.turn, name = nameOf(t);
-        if (!canShoot(M)) {
+        if (M.holder < 0) {
+          setStatus('Ballon libre. À ' + name + ' : déplacez un joueur (10 maxi) à moins de 3 du ballon pour le prendre.');
+        } else if (!canShoot(M)) {
           setStatus('À ' + name + ' : déplacez un de vos joueurs (10 maxi). ' + nameOf(1 - t) + ' a le ballon.');
         } else if (mustShoot(M)) {
           setStatus(name + ' doit tirer : un joueur a été déplacé au tour précédent.');
@@ -938,8 +984,9 @@
       $('place').addEventListener('click', function () {
         if (M && M.phase === 'aim' && mode === 'move') {
           if (sel == null || !ghost) return;
-          var e2 = movePlayer(M, sel, ghost.x, ghost.y);
+          var wasLoose = M.holder < 0, e2 = movePlayer(M, sel, ghost.x, ghost.y);
           if (e2) { setStatus(e2, true); return; }
+          if (wasLoose && M.holder >= 0 && !FAST) { refreshHeader(); redraw(); banner('Ballon récupéré par ' + nameOf(M.players[M.holder].team), 1000, enterPhase); return; }
           enterPhase();
           return;
         }
@@ -1033,19 +1080,30 @@
       function doShoot(ux, uy, dist, afterDuel) {
         if (!canShoot(M)) return;
         var si = M.holder, shooterTeam = M.players[si].team;
-        var out = resolveShot(M, si, ux, uy, dist, afterDuel);
-        var from = { x: M.players[si].x, y: M.players[si].y };
-        var to;
-        if (out.type === 'catch') to = { x: M.players[out.idx].x, y: M.players[out.idx].y };
-        else if (out.type === 'stop') to = out.at;
-        else to = out.at;
+        var out = resolveShot(M, si, ux, uy, dist, true);
+        var from = { x: M.players[si].x, y: M.players[si].y }, cur = from, passes = out.passes || [];
         M.phase = 'fly';
-        var fin = function () { finishShot(out, shooterTeam, afterDuel ? from : null); };
-        if (FAST) { fin(); return; }
-        var len = Math.hypot(to.x - from.x, to.y - from.y);
-        anim = { t0: performance.now(), dur: 220 + len * 11, from: from, to: to, done: fin };
-        M.ball = { x: from.x, y: from.y };
-        redraw();
+        function targetOf(o) { return o.type === 'catch' ? { x: M.players[o.idx].x, y: M.players[o.idx].y } : o.at; }
+        function fly(a, b, cb) {
+          if (FAST) { cb(); return; }
+          var len = Math.hypot(b.x - a.x, b.y - a.y);
+          anim = { t0: performance.now(), dur: 220 + len * 11, from: a, to: b, done: cb };
+          M.ball = { x: a.x, y: a.y };
+          redraw();
+        }
+        function end(o) { fly(cur, targetOf(o), function () { finishShot(o, shooterTeam, afterDuel ? from : null); }); }
+        function step(i) {
+          if (i >= passes.length) { end(out); return; }
+          var ps = passes[i], pt = { x: from.x + ux * ps.t, y: from.y + uy * ps.t };
+          fly(cur, pt, function () {
+            cur = pt;
+            runIntercept(ps, function (ok) {
+              if (ok) end({ type: 'catch', idx: ps.idx, shooter: si, intercepted: true, dist: ps.t });
+              else step(i + 1);
+            });
+          });
+        }
+        step(0);
       }
 
       // Dés : lancer physique à l'écran (cubes en 3D qui roulent puis s'immobilisent sur leur face).
@@ -1120,8 +1178,29 @@
         }, 1400);
       }
 
+      // Tentative d'interception : un dé de la couleur de l'intercepteur ; il faut atteindre le seuil (un 1 échoue toujours).
+      function runIntercept(ps, done) {
+        var roll = rollValue(), ok = roll >= ps.need && roll > 1, p = M.players[ps.idx];
+        window.__FOOT_INTERCEPTS = (window.__FOOT_INTERCEPTS || 0) + 1;
+        if (FAST) { done(ok); return; }
+        var t = p.team;
+        $('grp0').parentNode.style.display = t === 0 ? '' : 'none'; $('grp1').parentNode.style.display = t === 1 ? '' : 'none';
+        $('dieName' + t).textContent = nameOf(t); $('sum' + t).textContent = '';
+        $('diceTitle').textContent = 'Interception ? n°' + p.num + ' ' + nameOf(t) + ' : il faut ' + ps.need + (ps.need < 6 ? ' ou plus' : '');
+        $('diceRes').textContent = '';
+        var el = addDice($('grp' + t), 1, t)[0];
+        $('dice').hidden = false; setStatus('Interception ?');
+        throwDie(el, roll, 0, t ? -1 : 1);
+        setTimeout(function () {
+          $('sum' + t).textContent = roll;
+          var msg = ok ? 'Interceptée par n°' + p.num + ' (' + nameOf(t) + ') !' : 'Interception manquée (' + roll + ')';
+          $('diceRes').textContent = msg; setStatus(msg);
+          setTimeout(function () { $('dice').hidden = true; $('grp0').parentNode.style.display = ''; $('grp1').parentNode.style.display = ''; done(ok); }, 1500);
+        }, 1600);
+      }
+
       function finishShot(out, shooterTeam, origin) {
-        var duel = findDuel(M, out);
+        var duel = out.intercepted ? null : findDuel(M, out);   // l'interception se joue au dé, sans duel
         // Duel de départ déjà joué : aucun autre duel dans cette zone, le ballon arrive comme s'il avait été tiré normalement.
         if (duel && origin) {
           var cx = out.type === 'stop' ? out.at.x : M.players[out.idx].x, cy = out.type === 'stop' ? out.at.y : M.players[out.idx].y;
@@ -1160,7 +1239,8 @@
           return;
         }
         var newTeam = holderTeam(M);
-        if (newTeam !== shooterTeam && !FAST) banner('Ballon à ' + nameOf(newTeam), 800, null);
+        if (newTeam < 0 && !FAST) banner('Ballon libre', 900, null);
+        else if (newTeam !== shooterTeam && !FAST) banner('Ballon à ' + nameOf(newTeam), 800, null);
         enterPhase();
       }
 
@@ -1202,7 +1282,7 @@
       // Pour les tests automatiques
       window.__foot = {
         get M() { return M; }, newMatch: newMatch, startRestart: startRestart, checkPlacement: checkPlacement, placePlayer: placePlayer,
-        resolveShot: resolveShot, applyOutcome: applyOutcome, movePlayer: movePlayer, checkMove: checkMove, findDuel: findDuel, resolveDuel: resolveDuel, mustShoot: mustShoot, canShoot: canShoot, constants: { PW: PW, PH: PH, GX0: GX0, GX1: GX1, CC_R: CC_R, R_CATCH: R_CATCH },
+        resolveShot: resolveShot, applyOutcome: applyOutcome, movePlayer: movePlayer, checkMove: checkMove, interceptNeed: interceptNeed, computePasses: computePasses, findDuel: findDuel, resolveDuel: resolveDuel, mustShoot: mustShoot, canShoot: canShoot, constants: { PW: PW, PH: PH, GX0: GX0, GX1: GX1, CC_R: CC_R, R_CATCH: R_CATCH },
         toScreen: function (x, y) { var r = cv.getBoundingClientRect(); return { x: r.left + (x - 30) * S + W / 2, y: r.top + (y - 45) * S + H / 2 }; },
         get scale() { return S; }
       };
