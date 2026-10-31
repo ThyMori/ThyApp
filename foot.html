@@ -187,6 +187,13 @@
     .dicebox { text-align: center; padding: 14px 18px; }
     .dicetitle { font-family: var(--mono); font-size: 10.5px; letter-spacing: .26em; text-transform: uppercase; color: #e7e3d8; margin-bottom: 18px; }
     .dicerow { display: flex; gap: 46px; justify-content: center; }
+    .dicegrp { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; width: 150px; min-height: 64px; align-content: flex-start; perspective: 520px; }
+    .dsum { font-family: var(--mono); font-size: 22px; color: #fff; min-height: 1.2em; margin-top: -10px; }
+    .arcade { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .78); overflow: hidden; pointer-events: none; }
+    .arc { font-family: ui-monospace, Menlo, 'Courier New', monospace; font-weight: 900; font-size: 64px; letter-spacing: .06em; color: #ffe94a; text-shadow: 4px 4px 0 #e0262d, 8px 8px 0 #3a6ee0, 0 0 22px rgba(255, 233, 74, .8); animation: arcIn .55s cubic-bezier(.2, 1.6, .4, 1) both, arcBlink .16s steps(2) .55s 5; image-rendering: pixelated; }
+    @keyframes arcIn { from { transform: scale(7) rotate(-8deg); opacity: 0; } to { transform: scale(1) rotate(0); opacity: 1; } }
+    @keyframes arcBlink { 50% { color: #fff; text-shadow: 4px 4px 0 #3a6ee0, 8px 8px 0 #e0262d, 0 0 30px #fff; } }
+    .scan { position: absolute; inset: 0; background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, .28) 0 2px, transparent 2px 4px); }
     .diewrap { perspective: 520px; display: flex; flex-direction: column; align-items: center; gap: 22px; }
     .diewrap small { font-family: var(--serif); font-size: 15px; color: #e7e3d8; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .die { width: 64px; height: 64px; position: relative; transform-style: preserve-3d; }
@@ -267,12 +274,13 @@
           <div class="stage" id="stage">
             <canvas id="cv" aria-label="Terrain de football vu de dessus" role="img"></canvas>
             <div class="banner" id="banner" hidden></div>
+            <div class="arcade" id="arcade" hidden><span class="arc" id="arcTxt">DUEL !</span><i class="scan"></i></div>
             <div class="dice" id="dice" hidden aria-live="polite">
               <div class="dicebox">
                 <p class="dicetitle" id="diceTitle"></p>
                 <div class="dicerow">
-                  <div class="diewrap"><div class="die blue" id="die0"></div><small id="dieName0"></small></div>
-                  <div class="diewrap"><div class="die red" id="die1"></div><small id="dieName1"></small></div>
+                  <div class="diewrap"><div class="dicegrp" id="grp0"></div><small id="dieName0"></small><b class="dsum" id="sum0"></b></div>
+                  <div class="diewrap"><div class="dicegrp" id="grp1"></div><small id="dieName1"></small><b class="dsum" id="sum1"></b></div>
                 </div>
                 <p class="diceres" id="diceRes"></p>
               </div>
@@ -321,7 +329,7 @@
     <h4>Le tir</h4>
     <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir. Le résultat reste secret jusqu’à l’arrivée du ballon : rien n’indique si la passe ou le tir réussira. Le ballon se colle au premier joueur qu’il frôle (à moins de 3), de l’une ou l’autre équipe. S’il ne frôle personne, il s’arrête au bout de la flèche et le joueur le plus proche le prend. Après un tir, c’est à l’autre joueur de jouer.</p>
     <h4>Le duel</h4>
-    <p>Un joueur est « marqué » quand un adversaire est à moins de 3 de lui. Si le ballon arrive sur un joueur marqué, deux dés sont lancés à l’écran, un bleu et un rouge. Le plus grand gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au joueur qui marquait). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie.</p>
+    <p>Un joueur est « marqué » quand au moins un adversaire est à 3 unités ou moins de lui. Si le ballon arrive sur un joueur marqué, « DUEL ! » s’affiche, puis des dés sont lancés à l’écran : un dé pour le receveur plus un par coéquipier présent dans la zone (soutien), en face un dé par adversaire dans la zone. Bleus = dés bleus, Rouges = dés rouges ; on additionne. La plus grande somme gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au marqueur le plus proche). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie.</p>
     <h4>Les sorties de terrain</h4>
     <ul>
       <li>Sur le côté : touche pour l’adversaire de celui qui a tiré.</li>
@@ -520,19 +528,25 @@
       var MARK_R = 3;
       function findDuel(M, out) {
         if (!out || out.type !== 'catch') return null;
-        var c = M.players[out.idx], best = -1, bd = Infinity;
+        var c = M.players[out.idx], best = -1, bd = Infinity, def = [], att = [out.idx];
         M.players.forEach(function (p, i) {
-          if (p.team === c.team || !p.placed) return;
+          if (i === out.idx || !p.placed) return;
           var d = Math.hypot(p.x - c.x, p.y - c.y);
-          if (d < MARK_R && d < bd) { bd = d; best = i; }
+          if (d > MARK_R) return;
+          if (p.team === c.team) att.push(i);
+          else { def.push(i); if (d < bd) { bd = d; best = i; } }
         });
-        return best < 0 ? null : { catcher: out.idx, marker: best };
+        if (!def.length) return null;
+        var n = [0, 0]; n[c.team] = att.length; n[1 - c.team] = def.length;
+        return { catcher: out.idx, marker: best, att: att, def: def, n: n };
       }
-      // dé bleu = équipe 0, dé rouge = équipe 1. Le plus grand gagne ; à égalité, l'équipe du tireur l'emporte (la passe réussit).
+      // Un dé par joueur de la zone (receveur et soutiens d'un côté, marqueurs de l'autre) ; dé bleu = équipe 0, rouge = équipe 1.
+      // On additionne : la plus grande somme gagne ; à égalité, l'équipe du tireur l'emporte (la passe réussit).
       function resolveDuel(M, shooterTeam, duel, blue, red) {
         var ct = M.players[duel.catcher].team;
-        var winnerTeam = blue > red ? 0 : red > blue ? 1 : shooterTeam;
-        return { winnerTeam: winnerTeam, idx: winnerTeam === ct ? duel.catcher : duel.marker, blue: blue, red: red };
+        var sb = [].concat(blue).reduce(function (x, y) { return x + y; }, 0), sr = [].concat(red).reduce(function (x, y) { return x + y; }, 0);
+        var winnerTeam = sb > sr ? 0 : sr > sb ? 1 : shooterTeam;
+        return { winnerTeam: winnerTeam, idx: winnerTeam === ct ? duel.catcher : duel.marker, blue: sb, red: sr };
       }
       function holderTeam(M) { return M.players[M.holder].team; }
       function currentActor(M) { return M.phase === 'place' ? M.players[M.queue[0]].team : M.phase === 'aim' ? M.turn : -1; }
@@ -981,7 +995,6 @@
           el.appendChild(f);
         }
       }
-      buildDie($('die0')); buildDie($('die1'));
       function rollValue() {
         var q = window.__FOOT_ROLLS;
         if (q && q.length) return q.shift();
@@ -1001,26 +1014,42 @@
         ], { duration: 1500, delay: delay, fill: 'both', easing: 'cubic-bezier(.25,.6,.4,1)' });
         el.style.transform = final;
       }
+      function addDice(grp, n, team) {
+        grp.textContent = ''; grp.style.zoom = n <= 2 ? 1 : n <= 4 ? 0.8 : 0.62;
+        var els = [];
+        for (var k = 0; k < n; k++) { var e = document.createElement('div'); e.className = 'die ' + (team ? 'red' : 'blue'); buildDie(e); grp.appendChild(e); els.push(e); }
+        return els;
+      }
+      function sum(a) { return a.reduce(function (x, y) { return x + y; }, 0); }
       function runDuel(out, shooterTeam, duel, done) {
-        var blue = rollValue(), red = rollValue();
-        // l'ordre des tirages est (rouge, bleu) dans __FOOT_ROLLS : on lit rouge d'abord
-        var tmp = blue; blue = red; red = tmp;
+        var red = [], blue = [], k;
+        for (k = 0; k < duel.n[1]; k++) red.push(rollValue());      // rouges tirés d'abord (tests : __FOOT_ROLLS)
+        for (k = 0; k < duel.n[0]; k++) blue.push(rollValue());
         var d = resolveDuel(M, shooterTeam, duel, blue, red);
         var c = M.players[duel.catcher], mk = M.players[duel.marker];
-        var msg = 'Rouge ' + d.red + ' – Bleu ' + d.blue + ' : ' + (d.blue === d.red ? 'égalité, la passe est réussie. ' : '') + nameOf(d.winnerTeam) + ' gagne le duel';
+        var tie = sum(blue) === sum(red);
+        var msg = 'Bleu ' + sum(blue) + ' – Rouge ' + sum(red) + ' : ' + (tie ? 'égalité, la passe est réussie. ' : '') + nameOf(d.winnerTeam) + ' gagne le duel';
         if (FAST) { out.idx = d.idx; out.duel = d; done(); return; }
-        $('dieName0').textContent = nameOf(0); $('dieName1').textContent = nameOf(1);
-        $('diceTitle').textContent = 'Duel : n°' + c.num + ' ' + nameOf(c.team) + ' contre n°' + mk.num + ' ' + nameOf(mk.team);
+        $('dieName0').textContent = nameOf(0) + ' (' + duel.n[0] + ' dé' + (duel.n[0] > 1 ? 's' : '') + ')';
+        $('dieName1').textContent = nameOf(1) + ' (' + duel.n[1] + ' dé' + (duel.n[1] > 1 ? 's' : '') + ')';
+        $('sum0').textContent = ''; $('sum1').textContent = '';
+        $('diceTitle').textContent = 'n°' + c.num + ' ' + nameOf(c.team) + ' reçoit, marqué par ' + (duel.def.length) + ' adversaire' + (duel.def.length > 1 ? 's' : '');
         $('diceRes').textContent = '';
-        $('dice').hidden = false;
-        throwDie($('die0'), d.blue, 0, 1);
-        throwDie($('die1'), d.red, 140, -1);
-        setStatus('Duel de dés…');
+        var ab = $('arcade'); var at = $('arcTxt'); var clone = at.cloneNode(true); at.parentNode.replaceChild(clone, at);
+        ab.hidden = false; setStatus('DUEL !');
         setTimeout(function () {
-          $('diceRes').textContent = msg;
-          setStatus(msg);
-          setTimeout(function () { $('dice').hidden = true; out.idx = d.idx; out.duel = d; done(); }, 1700);
-        }, 1700);
+          ab.hidden = true;
+          var e0 = addDice($('grp0'), duel.n[0], 0), e1 = addDice($('grp1'), duel.n[1], 1);
+          $('dice').hidden = false; setStatus('Duel de dés…');
+          e0.forEach(function (e, i) { throwDie(e, blue[i], i * 120, 1); });
+          e1.forEach(function (e, i) { throwDie(e, red[i], 60 + i * 120, -1); });
+          setTimeout(function () {
+            $('sum0').textContent = duel.n[0] > 1 ? '= ' + sum(blue) : sum(blue);
+            $('sum1').textContent = duel.n[1] > 1 ? '= ' + sum(red) : sum(red);
+            $('diceRes').textContent = msg; setStatus(msg);
+            setTimeout(function () { $('dice').hidden = true; out.idx = d.idx; out.duel = d; done(); }, 1900);
+          }, 1500 + 120 * Math.max(duel.n[0], duel.n[1]) + 300);
+        }, 1400);
       }
 
       function finishShot(out, shooterTeam) {
