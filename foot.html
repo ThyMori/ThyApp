@@ -327,7 +327,7 @@
       <li>Si vous avez déplacé un joueur à votre tour précédent et que vous avez le ballon, vous êtes obligé de tirer.</li>
     </ul>
     <h4>Le tir</h4>
-    <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir. Le résultat reste secret jusqu’à l’arrivée du ballon : rien n’indique si la passe ou le tir réussira. Le ballon se colle au premier joueur qu’il frôle (à moins de 3), de l’une ou l’autre équipe. S’il ne frôle personne, il s’arrête au bout de la flèche et le joueur le plus proche le prend. Après un tir, c’est à l’autre joueur de jouer.</p>
+    <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir ; vous pouvez aussi changer d’avis en glissant le doigt dans la bande rouge « annuler » avant de relâcher. Le résultat reste secret jusqu’à l’arrivée du ballon : rien n’indique si la passe ou le tir réussira. Le ballon se colle au premier joueur qu’il frôle (à moins de 3), de l’une ou l’autre équipe. S’il ne frôle personne, il s’arrête au bout de la flèche et le joueur le plus proche le prend. Après un tir, c’est à l’autre joueur de jouer.</p>
     <h4>Le duel</h4>
     <p>Un joueur est « marqué » quand au moins un adversaire est à 3 unités ou moins de lui. Si le ballon arrive sur un joueur marqué, « DUEL ! » s’affiche, puis des dés sont lancés à l’écran : un dé pour le receveur plus un par coéquipier présent dans la zone (soutien), en face un dé par adversaire dans la zone. Bleus = dés bleus, Rouges = dés rouges ; on additionne. La plus grande somme gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au marqueur le plus proche). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie.</p>
     <h4>Les sorties de terrain</h4>
@@ -362,7 +362,6 @@
       var R_BODY = 2.1;        // rayon dessiné d'un joueur
       var MAX_DIST = 75;       // portée maximale d'un tir
       var MIN_SHOT = 4;        // un tir plus court est annulé
-      var SPACING = 4.4;       // écart minimal entre deux joueurs placés
       var OPP_DIST = 6;        // adversaires à 6 au moins du ballon lors d'une touche, d'un corner…
       var EDGE = 1.5;          // marge de placement le long des lignes
       var COLORS = ['#2f5fd0', '#d33a3a'];
@@ -399,10 +398,6 @@
       function checkPlacement(M, idx, x, y) {
         var p = M.players[idx], r = M.restart;
         if (x < EDGE || x > PW - EDGE || y < EDGE || y > PH - EDGE) return 'Placez-vous à l’intérieur du terrain.';
-        for (var i = 0; i < M.players.length; i++) {
-          var o = M.players[i];
-          if (i !== idx && o.placed && Math.hypot(o.x - x, o.y - y) < SPACING) return 'Trop près d’un autre joueur.';
-        }
         if (r.kind === 'kickoff') {
           if (p.team === 0 ? y < PH / 2 + 1 : y > PH / 2 - 1) return 'Au coup d’envoi, restez dans votre moitié de terrain.';
           if (p.team !== r.team && Math.hypot(x - 30, y - 45) < CC_R + 1) return 'Les adversaires restent hors du rond central.';
@@ -434,10 +429,6 @@
         if (mustShoot(M)) return 'Vous avez déplacé un joueur au tour précédent : vous devez tirer.';
         if (Math.hypot(x - p.x, y - p.y) > MOVE_R + 1e-9) return 'Trop loin : 10 maximum.';
         if (x < EDGE || x > PW - EDGE || y < EDGE || y > PH - EDGE) return 'Restez à l’intérieur du terrain.';
-        for (var i = 0; i < M.players.length; i++) {
-          var o = M.players[i];
-          if (i !== idx && o.placed && Math.hypot(o.x - x, o.y - y) < SPACING) return 'Trop près d’un autre joueur.';
-        }
         return null;
       }
       function movePlayer(M, idx, x, y) {
@@ -658,10 +649,19 @@
       var ballShown = null;    // position du ballon pendant l'animation
       var raf = 0;
 
+      // Zone d'annulation : bande du côté opposé au point de départ ; relâcher dedans (ou presser Échap) annule le tir.
+      var CANCEL_H = 74;
+      function cancelBand() {
+        var r = cv.getBoundingClientRect();
+        return (aim && aim.sy < r.top + r.height / 2) ? { top: r.bottom - CANCEL_H, bottom: r.bottom, r: r, atBottom: true } : { top: r.top, bottom: r.top + CANCEL_H, r: r, atBottom: false };
+      }
+      function inCancel(cy) { if (!aim) return false; var b = cancelBand(); return cy >= b.top && cy <= b.bottom; }
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && aim) { aim = null; redraw(); } });
+      var touching = false, finger = null;   // doigt posé (loupe de placement)
       function aimShot() {
         if (!aim) return null;
         var dx = aim.cx - aim.sx, dy = aim.cy - aim.sy, len = Math.hypot(dx, dy);
-        if (len < 14) return null;
+        if (len < 14 || inCancel(aim.cy)) return null;
         var power = Math.min(1, (len - 14) / 126);
         var dist = power * MAX_DIST;
         if (dist < MIN_SHOT) return null;
@@ -767,6 +767,46 @@
           ctx.fillStyle = '#fff'; ctx.font = '700 ' + Math.max(10, Math.round(S * 1.7)) + 'px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText(Math.round(sh.power * 100) + ' %', X(h2.x), Y(h2.y) + R_BODY * S + S * 2.2);
         }
+        if (aim && M.phase === 'aim' && !anim && mode === 'shoot' && Math.hypot(aim.cx - aim.sx, aim.cy - aim.sy) >= 14) {
+          var cb = cancelBand(), hot = inCancel(aim.cy), by = cb.atBottom ? H - CANCEL_H : 0;
+          ctx.save();
+          ctx.fillStyle = hot ? 'rgba(230,70,70,.55)' : 'rgba(230,70,70,.22)'; ctx.fillRect(0, by, W, CANCEL_H);
+          ctx.setLineDash([6, 6]); ctx.strokeStyle = 'rgba(255,200,200,.9)'; ctx.lineWidth = 2;
+          ctx.strokeRect(2, by + 2, W - 4, CANCEL_H - 4); ctx.setLineDash([]);
+          ctx.fillStyle = '#fff'; ctx.font = '700 13px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(hot ? '✕ RELÂCHEZ : TIR ANNULÉ' : '✕ Glissez ici pour annuler', W / 2, by + CANCEL_H / 2);
+          ctx.restore();
+        }
+        drawLoupe();
+      }
+
+      // Loupe : pendant qu'on pose ou déplace un joueur, une bulle agrandie montre l'endroit caché par le doigt.
+      var loupeBuf = null;
+      function drawLoupe() {
+        if (!touching || !ghost || !(M.phase === 'place' || (M.phase === 'aim' && mode === 'move' && sel != null))) return;
+        var R = 58, Z = 2.4, gx = X(ghost.x), gy = Y(ghost.y);
+        var lx = W - R - 10, ly = R + 10;
+        if (finger) {
+          var rr = cv.getBoundingClientRect(), fx = finger.x - rr.left, fy = finger.y - rr.top;
+          if (fx > W / 2) lx = R + 10;                    // à l'opposé du doigt
+          if (fy < H * 0.4) ly = H - R - 10;
+        }
+        if (!loupeBuf) loupeBuf = document.createElement('canvas');
+        loupeBuf.width = cv.width; loupeBuf.height = cv.height;
+        loupeBuf.getContext('2d').drawImage(cv, 0, 0);
+        var sw = (R * 2 / Z) * dpr, sx = gx * dpr - sw / 2, sy = gy * dpr - sw / 2;
+        ctx.save();
+        ctx.beginPath(); ctx.arc(lx, ly, R, 0, 6.283); ctx.clip();
+        ctx.fillStyle = '#1f3a22'; ctx.fillRect(lx - R, ly - R, R * 2, R * 2);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(loupeBuf, sx, sy, sw, sw, (lx - R) * dpr, (ly - R) * dpr, R * 2 * dpr, R * 2 * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.restore();
+        ctx.save(); ctx.lineWidth = 3; ctx.strokeStyle = '#f6b564';
+        ctx.beginPath(); ctx.arc(lx, ly, R, 0, 6.283); ctx.stroke();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,.85)';
+        ctx.beginPath(); ctx.moveTo(lx - 7, ly); ctx.lineTo(lx + 7, ly); ctx.moveTo(lx, ly - 7); ctx.lineTo(lx, ly + 7); ctx.stroke();
+        ctx.restore();
       }
 
       // ======================================================================
@@ -934,6 +974,7 @@
         if (best >= 0 && best !== sel) { sel = best; ghost = null; dragging = true; updateControls(); }
         else if (sel != null) { dragging = true; snapGhost(e); }
         else { setStatus('Touchez d’abord un de vos joueurs.', true); return; }
+        touching = true; finger = { x: e.clientX, y: e.clientY };
         try { cv.setPointerCapture(e.pointerId); } catch (x) {}
         redraw();
       }
@@ -941,7 +982,7 @@
       // ----- visée : poser, tirer en arrière, relâcher -----
       cv.addEventListener('pointerdown', function (e) {
         if (!M) return;
-        if (M.phase === 'place') { pointerPlace(e); return; }
+        if (M.phase === 'place') { touching = true; finger = { x: e.clientX, y: e.clientY }; try { cv.setPointerCapture(e.pointerId); } catch (x) {} pointerPlace(e); return; }
         if (M.phase !== 'aim' || anim) return;
         if (mode === 'move') { moveDown(e); return; }
         if (!canShoot(M)) return;
@@ -950,10 +991,13 @@
         redraw();
       });
       cv.addEventListener('pointermove', function (e) {
+        if (touching) finger = { x: e.clientX, y: e.clientY };
+        if (touching && M && M.phase === 'place') { pointerPlace(e); return; }
         if (aim) { aim.cx = e.clientX; aim.cy = e.clientY; redraw(); }
         else if (dragging && sel != null && M && M.phase === 'aim' && mode === 'move') { snapGhost(e); redraw(); }
       });
       function endAim(e, cancel) {
+        if (touching) { touching = false; finger = null; redraw(); }
         if (dragging) { dragging = false; redraw(); return; }
         if (!aim) return;
         aim.cx = e.clientX; aim.cy = e.clientY;
