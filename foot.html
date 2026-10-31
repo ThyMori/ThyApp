@@ -329,7 +329,7 @@
     <h4>Le tir</h4>
     <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir ; vous pouvez aussi changer d’avis en glissant le doigt dans la bande rouge « annuler » avant de relâcher. Le résultat reste secret jusqu’à l’arrivée du ballon : rien n’indique si la passe ou le tir réussira. Le ballon se colle au premier joueur qu’il frôle (à moins de 3), de l’une ou l’autre équipe. S’il ne frôle personne, il s’arrête au bout de la flèche et le joueur le plus proche le prend. Après un tir, c’est à l’autre joueur de jouer.</p>
     <h4>Le duel</h4>
-    <p>Un joueur est « marqué » quand au moins un adversaire est à 3 unités ou moins de lui. Le duel a lieu à l’arrivée du ballon : sur le joueur qu’il frôle, ou, quand il s’arrête de lui-même, sur le joueur le plus proche qui va le chercher. Si le receveur est marqué, « DUEL ! » s’affiche, puis des dés sont lancés à l’écran : un dé pour le receveur plus un par coéquipier présent dans la zone (soutien), en face un dé par adversaire dans la zone. Bleus = dés bleus, Rouges = dés rouges ; on additionne. La plus grande somme gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au marqueur le plus proche). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie.</p>
+    <p>Un joueur est « marqué » quand au moins un adversaire est à 3 unités ou moins de lui. Le duel a lieu d’abord au départ : si le tireur est marqué, il doit gagner son duel pour que la passe ou le tir parte (sinon le marqueur le plus proche lui prend le ballon, et c’est à l’autre de jouer). Il a lieu ensuite à l’arrivée du ballon : sur le joueur qu’il frôle, ou, quand il s’arrête de lui-même, sur le joueur le plus proche qui va le chercher. Si le receveur est marqué, « DUEL ! » s’affiche, puis des dés sont lancés à l’écran : un dé pour le receveur plus un par coéquipier présent dans la zone (soutien), en face un dé par adversaire dans la zone. Bleus = dés bleus, Rouges = dés rouges ; on additionne. La plus grande somme gagne le duel et donc le ballon : l’équipe gagnante le garde (ou le prend, au marqueur le plus proche). En cas d’égalité, c’est l’équipe de celui qui a tiré qui l’emporte : la passe est réussie.</p>
     <h4>Les sorties de terrain</h4>
     <ul>
       <li>Sur le côté : touche pour l’adversaire de celui qui a tiré.</li>
@@ -519,9 +519,9 @@
       var MARK_R = 3;
       function findDuel(M, out) {
         // Le duel a lieu à l'arrivée du ballon : sur le joueur frôlé (catch), ou à l'endroit où il s'arrête (stop, le plus proche le reçoit).
-        if (!out || (out.type !== 'catch' && out.type !== 'stop')) return null;
-        var rc = out.type === 'catch' ? out.idx : out.nearest;
-        var c = out.type === 'catch' ? M.players[rc] : { x: Math.max(EDGE / 2, Math.min(PW - EDGE / 2, out.at.x)), y: Math.max(EDGE / 2, Math.min(PH - EDGE / 2, out.at.y)), team: M.players[rc].team };
+        if (!out || (out.type !== 'catch' && out.type !== 'stop' && out.type !== 'depart')) return null;
+        var rc = out.type === 'stop' ? out.nearest : out.idx;
+        var c = out.type !== 'stop' ? M.players[rc] : { x: Math.max(EDGE / 2, Math.min(PW - EDGE / 2, out.at.x)), y: Math.max(EDGE / 2, Math.min(PH - EDGE / 2, out.at.y)), team: M.players[rc].team };
         var best = -1, bd = Infinity, def = [], att = [rc];
         M.players.forEach(function (p, i) {
           if (i === rc || !p.placed) return;
@@ -1013,6 +1013,22 @@
 
       function shoot(ux, uy, dist) {
         if (!canShoot(M)) return;
+        var si0 = M.holder, team0 = M.players[si0].team;
+        // Duel au départ : si le tireur est marqué, il doit d'abord gagner son duel pour que la passe ou le tir parte.
+        var dd = findDuel(M, { type: 'depart', idx: si0 });
+        if (dd) {
+          var o0 = { type: 'depart' };
+          M.phase = 'fly';
+          runDuel(o0, team0, dd, function () {
+            if (M.players[o0.idx].team === team0) { M.phase = 'aim'; doShoot(ux, uy, dist); }
+            else finishShot2({ type: 'catch', idx: o0.idx, shooter: si0, tackled: true }, team0);
+          });
+          return;
+        }
+        doShoot(ux, uy, dist);
+      }
+      function doShoot(ux, uy, dist) {
+        if (!canShoot(M)) return;
         var si = M.holder, shooterTeam = M.players[si].team;
         var out = resolveShot(M, si, ux, uy, dist);
         var from = { x: M.players[si].x, y: M.players[si].y };
@@ -1081,7 +1097,7 @@
         $('dieName0').textContent = nameOf(0) + ' (' + duel.n[0] + ' dé' + (duel.n[0] > 1 ? 's' : '') + ')';
         $('dieName1').textContent = nameOf(1) + ' (' + duel.n[1] + ' dé' + (duel.n[1] > 1 ? 's' : '') + ')';
         $('sum0').textContent = ''; $('sum1').textContent = '';
-        $('diceTitle').textContent = 'n°' + c.num + ' ' + nameOf(c.team) + ' reçoit, marqué par ' + (duel.def.length) + ' adversaire' + (duel.def.length > 1 ? 's' : '');
+        $('diceTitle').textContent = 'n°' + c.num + ' ' + nameOf(c.team) + (out.type === 'depart' ? ' tire, marqué par ' : ' reçoit, marqué par ') + (duel.def.length) + ' adversaire' + (duel.def.length > 1 ? 's' : '');
         $('diceRes').textContent = '';
         var ab = $('arcade'); var at = $('arcTxt'); var clone = at.cloneNode(true); at.parentNode.replaceChild(clone, at);
         ab.hidden = false; setStatus('DUEL !');
