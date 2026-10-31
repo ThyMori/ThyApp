@@ -85,6 +85,23 @@
     }
     header .back:hover, header .back:focus-visible { color: var(--amber); outline: none; }
     header h1 { font: inherit; color: var(--ink); white-space: nowrap; }
+    button.info {
+      justify-self: end; width: 32px; height: 32px; padding: 0; border-radius: 50%;
+      font-family: var(--serif); font-style: italic; font-size: 18px; letter-spacing: 0; text-transform: none;
+      color: var(--ink); background: rgba(13, 14, 17, .55); border: 1px solid rgba(235, 232, 225, .5);
+    }
+    dialog#rules {
+      width: min(560px, calc(100vw - 28px)); max-height: calc(100dvh - 40px); padding: 22px 20px 18px; overflow: auto;
+      color: var(--ink); background: #14151a; border: 1px solid rgba(246, 181, 100, .5); border-radius: 2px;
+      margin: auto;
+    }
+    dialog#rules::backdrop { background: rgba(0, 0, 0, .65); }
+    dialog#rules h3 { font-family: var(--serif); font-weight: 400; font-size: 26px; margin-bottom: 12px; }
+    dialog#rules h4 { font-family: var(--mono); font-weight: 400; font-size: 10px; letter-spacing: .24em; text-transform: uppercase; color: var(--amber); margin: 14px 0 6px; }
+    dialog#rules p, dialog#rules li { font-family: var(--serif); font-size: 15.5px; line-height: 1.4; color: #cfccc5; }
+    dialog#rules ul { list-style: none; display: grid; gap: 5px; }
+    dialog#rules li::before { content: "– "; color: var(--amber); }
+    dialog#rules button { width: 100%; margin-top: 18px; }
 
     button {
       appearance: none;
@@ -164,8 +181,10 @@
       animation: pop .25s ease-out; white-space: pre-line;
     }
     @keyframes pop { from { transform: translate(-50%, -50%) scale(.85); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
-    .bottom { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; min-height: 52px; align-items: center; }
-    .hint { grid-column: 1 / -1; text-align: center; font-family: var(--mono); font-size: 10px; letter-spacing: .14em; line-height: 1.7; text-transform: uppercase; color: rgba(139, 139, 147, .85); }
+    .bottom { display: flex; flex-wrap: wrap; gap: 8px 10px; min-height: 52px; align-items: center; }
+    .bottom button { flex: 1 1 0; }
+    .bottom button.primary { flex: 2 1 0; }
+    .hint { flex: 1 1 100%; text-align: center; font-family: var(--mono); font-size: 10px; letter-spacing: .14em; line-height: 1.7; text-transform: uppercase; color: rgba(139, 139, 147, .85); }
 
     /* ---------- Résultat ---------- */
     h2 { font-family: var(--serif); font-weight: 400; font-size: 32px; line-height: 1.1; text-align: center; }
@@ -187,7 +206,7 @@
     <header>
       <button class="back" id="back" type="button">← Menu</button>
       <h1>Football</h1>
-      <span></span>
+      <button class="info" id="info" type="button" aria-label="Règles du jeu" title="Règles du jeu">i</button>
     </header>
 
     <main style="width:100%;max-width:640px;flex:1;min-height:0;display:flex;flex-direction:column;gap:10px">
@@ -213,10 +232,10 @@
             </div>
           </div>
           <ul class="rules">
-            <li>Le possesseur du ballon joue : posez le doigt, tirez en arrière, relâchez. La flèche montre où le ballon ira.</li>
+            <li>À tour de rôle : tirer si l’on a le ballon, ou déplacer un de ses joueurs (10 maxi).</li>
             <li>Le ballon se colle au premier joueur qu’il frôle, de l’une ou l’autre équipe.</li>
             <li>Un but consomme un ballon. Quand il n’y en a plus, le match est terminé.</li>
-            <li>Avant chaque engagement ou touche, vous placez vos joueurs à tour de rôle.</li>
+            <li>Le bouton « i » en haut à droite donne toutes les règles.</li>
           </ul>
           <div class="actions">
             <button class="primary" id="go" type="button">Coup d’envoi</button>
@@ -236,9 +255,10 @@
             <div class="banner" id="banner" hidden></div>
           </div>
           <div class="bottom" id="bottom">
-            <button id="undo" type="button" hidden>Effacer</button>
-            <button class="primary" id="place" type="button" hidden disabled>Placer</button>
             <p class="hint" id="hint"></p>
+            <button id="undo" type="button" hidden>Effacer</button>
+            <button id="mode" type="button" hidden>Déplacer un joueur</button>
+            <button class="primary" id="place" type="button" hidden disabled>Placer</button>
           </div>
         </section>
 
@@ -259,6 +279,32 @@
       </div>
     </main>
   </div>
+
+  <dialog id="rules" aria-labelledby="rulesTitle">
+    <h3 id="rulesTitle">Règles du jeu</h3>
+    <h4>Le principe</h4>
+    <p>Deux joueurs, une équipe de cinq joueurs de champ chacun, un seul ballon à la fois. Le joueur bleu attaque le but du haut, le rouge celui du bas. Un but fait gagner un point et consomme un ballon : quand tous les ballons choisis ont été joués, le match est terminé et celui qui a marqué le plus de buts gagne.</p>
+    <h4>L’engagement</h4>
+    <p>Le sort désigne qui engage. Son joueur n°1 est posé au centre avec le ballon. Puis on place les autres à tour de rôle, chacun dans sa moitié de terrain : l’adversaire place son n°1, celui qui engage son n°2, l’adversaire son n°2, et ainsi de suite jusqu’aux n°5. Les adversaires restent hors du rond central. Deux joueurs ne peuvent pas être l’un sur l’autre.</p>
+    <h4>Un tour de jeu</h4>
+    <ul>
+      <li>Les joueurs jouent chacun leur tour.</li>
+      <li>Si votre équipe a le ballon, vous pouvez tirer, ou déplacer un de vos joueurs.</li>
+      <li>Si elle ne l’a pas, vous déplacez un de vos joueurs.</li>
+      <li>Un déplacement se fait dans un rayon de 10 autour du joueur, à l’intérieur du terrain. Si c’est le porteur du ballon qui bouge, le ballon le suit.</li>
+      <li>Si vous avez déplacé un joueur à votre tour précédent et que vous avez le ballon, vous êtes obligé de tirer.</li>
+    </ul>
+    <h4>Le tir</h4>
+    <p>Posez le doigt n’importe où sur le terrain, tirez en arrière, puis relâchez : une flèche indique la direction, et sa longueur la portée (le pourcentage de puissance s’affiche). Un tout petit geste annule le tir. Le ballon se colle au premier joueur qu’il frôle (à moins de 3), de l’une ou l’autre équipe. S’il ne frôle personne, il s’arrête au bout de la flèche et le joueur le plus proche le prend. Après un tir, c’est à l’autre joueur de jouer.</p>
+    <h4>Les sorties de terrain</h4>
+    <ul>
+      <li>Sur le côté : touche pour l’adversaire de celui qui a tiré.</li>
+      <li>Derrière la ligne de but, hors des poteaux : sortie de but pour la défense si l’attaquant a tiré, corner pour l’adversaire si on a renvoyé le ballon derrière sa propre ligne.</li>
+      <li>Avant chaque touche, corner ou sortie de but, les joueurs sont replacés à tour de rôle : l’équipe qui n’a pas le ballon place en premier, un des joueurs de l’autre équipe est déjà sur la ligne avec le ballon. Les adversaires restent à 6 au moins du ballon.</li>
+      <li>Dans le but : un but est marqué, même contre son camp. Après un but, l’équipe qui l’a encaissé engage.</li>
+    </ul>
+    <button id="rulesClose" type="button">Compris</button>
+  </dialog>
 
   <script src="firebase-config.js"></script>
   <script src="db.js"></script>
@@ -288,7 +334,7 @@
       var COLORS = ['#2f5fd0', '#d33a3a'];
 
       function newMatch(names, balls, kickTeam) {
-        var M = { names: names, scores: [0, 0], ballsTotal: balls, consumed: 0, players: [], phase: 'place', restart: null, queue: [], holder: 0, taker: 0, ball: { x: 30, y: 45 }, first: kickTeam, lastEvent: null };
+        var M = { turn: kickTeam, last: [null, null], names: names, scores: [0, 0], ballsTotal: balls, consumed: 0, players: [], phase: 'place', restart: null, queue: [], holder: 0, taker: 0, ball: { x: 30, y: 45 }, first: kickTeam, lastEvent: null };
         for (var t = 0; t < 2; t++) for (var n = 1; n <= 5; n++) M.players.push({ team: t, num: n, x: 30, y: 45, placed: false });
         startRestart(M, 'kickoff', kickTeam, { x: 30, y: 45 });
         return M;
@@ -301,14 +347,17 @@
         M.taker = taker; M.holder = taker;
         var t = M.players[taker]; t.x = spot.x; t.y = spot.y; t.placed = true;
         M.ball = { x: t.x, y: t.y };
-        // ordre de placement : l'équipe qui a le ballon commence, puis on alterne ; il reste 4 joueurs à placer pour elle, 5 pour l'autre
+        // ordre de placement : l'adversaire place son n°1, puis l'équipe qui a le ballon son n°2, puis l'adversaire son n°2, etc.
+        // (le n°1 de l'équipe qui a le ballon est déjà en place : il tient le ballon)
         var q = [], a = [], b = [], i;
         for (i = 0; i < 5; i++) { if (team * 5 + i !== taker) a.push(team * 5 + i); b.push((1 - team) * 5 + i); }
         while (a.length || b.length) {
-          if (a.length) q.push(a.shift());
           if (b.length) q.push(b.shift());
+          if (a.length) q.push(a.shift());
         }
         M.queue = q;
+        M.turn = team;
+        M.last = [null, null];
         M.phase = 'place';
       }
 
@@ -335,13 +384,47 @@
         if (M.queue[0] !== idx) return 'Ce n’est pas son tour d’être placé.';
         var p = M.players[idx]; p.x = x; p.y = y; p.placed = true;
         M.queue.shift();
-        if (!M.queue.length) M.phase = 'aim';
+        if (!M.queue.length) { M.phase = 'aim'; M.turn = M.restart.team; M.last = [null, null]; }
+        return null;
+      }
+
+      // ----- tour de jeu : tirer (si on a le ballon) ou déplacer un de ses joueurs d'au plus 10 -----
+      var MOVE_R = 10;
+      function canShoot(M) { return M.phase === 'aim' && holderTeam(M) === M.turn; }
+      // Le possesseur qui a déplacé un joueur à son tour précédent doit tirer.
+      function mustShoot(M) { return canShoot(M) && M.last[M.turn] === 'move'; }
+      function checkMove(M, idx, x, y) {
+        var p = M.players[idx];
+        if (M.phase !== 'aim') return 'Ce n’est pas le moment de déplacer un joueur.';
+        if (p.team !== M.turn) return 'Ce n’est pas votre joueur.';
+        if (mustShoot(M)) return 'Vous avez déplacé un joueur au tour précédent : vous devez tirer.';
+        if (Math.hypot(x - p.x, y - p.y) > MOVE_R + 1e-9) return 'Trop loin : 10 maximum.';
+        if (x < EDGE || x > PW - EDGE || y < EDGE || y > PH - EDGE) return 'Restez à l’intérieur du terrain.';
+        for (var i = 0; i < M.players.length; i++) {
+          var o = M.players[i];
+          if (i !== idx && o.placed && Math.hypot(o.x - x, o.y - y) < SPACING) return 'Trop près d’un autre joueur.';
+        }
+        return null;
+      }
+      function movePlayer(M, idx, x, y) {
+        var err = checkMove(M, idx, x, y);
+        if (err) return err;
+        var p = M.players[idx];
+        p.x = x; p.y = y;
+        if (idx === M.holder) M.ball = { x: x, y: y };
+        M.last[p.team] = 'move';
+        M.turn = 1 - p.team;
         return null;
       }
 
       // Trajet du ballon : part du tireur, direction (ux, uy) unitaire, longueur dist.
       // Résultat : catch (saisi), goal, out (touche / corner / sortie de but) ou stop (arrêt libre).
       function resolveShot(M, si, ux, uy, dist) {
+        var r = resolveShot0(M, si, ux, uy, dist);
+        r.shooter = si;
+        return r;
+      }
+      function resolveShot0(M, si, ux, uy, dist) {
         var S = M.players[si], sx = S.x, sy = S.y, k;
         // sortie du terrain (distance parcourue jusqu'à la ligne)
         var ex = Infinity, side = null;
@@ -386,6 +469,8 @@
 
       // Applique le résultat. Renvoie { goal: bool, over: bool, restart: bool }.
       function applyOutcome(M, o) {
+        var st = o.shooter == null ? null : M.players[o.shooter].team;
+        if (st != null && (o.type === 'catch' || o.type === 'stop')) { M.last[st] = 'shoot'; M.turn = 1 - st; }
         if (o.type === 'catch') {
           M.holder = o.idx; M.ball = { x: M.players[o.idx].x, y: M.players[o.idx].y }; M.phase = 'aim';
           return { goal: false };
@@ -406,7 +491,7 @@
       }
 
       function holderTeam(M) { return M.players[M.holder].team; }
-      function currentActor(M) { return M.phase === 'place' ? M.players[M.queue[0]].team : M.phase === 'aim' ? holderTeam(M) : -1; }
+      function currentActor(M) { return M.phase === 'place' ? M.players[M.queue[0]].team : M.phase === 'aim' ? M.turn : -1; }
 
       // ======================================================================
       //  Dessin
@@ -508,7 +593,8 @@
 
       // ----- état d'affichage -----
       var M = null;            // le match
-      var ghost = null;        // point de placement en attente {x, y}
+      var ghost = null;        // point de placement ou de déplacement en attente {x, y}
+      var mode = 'shoot', sel = null, dragging = false;   // tour de jeu : tirer ou déplacer un joueur (sel = joueur choisi)
       var aim = null;          // visée en cours {sx, sy, cx, cy}
       var anim = null;         // ballon en vol {t0, dur, from, to, done}
       var ballShown = null;    // position du ballon pendant l'animation
@@ -563,6 +649,32 @@
           if (!p.placed) return;
           drawPlayer(p.x, p.y, p.team, p.num);
         });
+        // déplacement d'un joueur : joueurs concernés, rayon de 10, fantôme
+        if (M.phase === 'aim' && !anim && mode === 'move') {
+          M.players.forEach(function (p) {
+            if (p.team === M.turn) P.penCircle(ctx, p.x, p.y, R_BODY + 0.9, X, Y, S, 'rgba(255,255,255,.7)', Math.max(1.4, S * 0.22));
+          });
+          if (sel != null) {
+            var sp = M.players[sel], rc = [];
+            for (var q = 0; q < 40; q++) rc.push([sp.x + Math.cos(q / 40 * 6.283) * MOVE_R, sp.y + Math.sin(q / 40 * 6.283) * MOVE_R]);
+            ctx.save(); ctx.setLineDash([3, 7]);
+            P.pen(ctx, rc, true, X, Y, S, 'rgba(255,255,255,.85)', Math.max(1.6, S * 0.28));
+            ctx.restore();
+            P.penCircle(ctx, sp.x, sp.y, R_BODY + 1.5, X, Y, S, '#f6b564', Math.max(2.2, S * 0.4));
+            if (ghost) {
+              var bad2 = checkMove(M, sel, ghost.x, ghost.y);
+              ctx.save(); ctx.setLineDash([2, 6]);
+              P.pen(ctx, [[sp.x, sp.y], [ghost.x, ghost.y]], false, X, Y, S, 'rgba(255,255,255,.8)', Math.max(1.6, S * 0.26));
+              ctx.restore();
+              drawPlayer(ghost.x, ghost.y, sp.team, sp.num, { alpha: bad2 ? 0.35 : 0.75 });
+              if (bad2) {
+                var mx = X(ghost.x), my = Y(ghost.y), qq = R_BODY * S * 0.8;
+                ctx.strokeStyle = '#ffd0d0'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(mx - qq, my - qq); ctx.lineTo(mx + qq, my + qq); ctx.moveTo(mx + qq, my - qq); ctx.lineTo(mx - qq, my + qq); ctx.stroke();
+              }
+            }
+          }
+        }
         // titulaire du ballon
         if (M.phase === 'aim' && !anim) {
           var h = M.players[M.holder];
@@ -585,7 +697,7 @@
           drawBall(b.x + (onHolder ? 1.7 : 0), b.y + (onHolder ? 1.1 : 0));
         }
         // flèche de visée
-        var sh = (M.phase === 'aim' && !anim) ? aimShot() : null;
+        var sh = (M.phase === 'aim' && !anim && mode === 'shoot') ? aimShot() : null;
         if (sh) {
           var h2 = M.players[M.holder], col = COLORS[h2.team];
           var out = resolveShot(M, M.holder, sh.ux, sh.uy, sh.dist);
@@ -666,21 +778,47 @@
 
       var KIND_TEXT = { kickoff: 'engagement', throw: 'touche', corner: 'corner', goalkick: 'sortie de but' };
 
+      function statusAim() {
+        var t = M.turn, name = nameOf(t);
+        if (!canShoot(M)) {
+          setStatus('À ' + name + ' : déplacez un de vos joueurs (10 maxi). ' + nameOf(1 - t) + ' a le ballon.');
+        } else if (mustShoot(M)) {
+          setStatus(name + ' doit tirer : un joueur a été déplacé au tour précédent.');
+        } else if (mode === 'move') {
+          setStatus(sel == null ? name + ' : touchez un de vos joueurs, puis l’endroit où le placer (10 maxi).' : name + ' : touchez ou glissez vers la nouvelle place, puis « Déplacer ».');
+        } else {
+          setStatus(name + ' a le ballon : tirez en arrière puis relâchez, ou déplacez un joueur.');
+        }
+      }
+      function updateControls() {
+        var cs = canShoot(M), ms = mustShoot(M);
+        $('undo').hidden = true;
+        $('mode').hidden = !(cs && !ms);
+        $('mode').textContent = mode === 'move' ? 'Tirer' : 'Déplacer un joueur';
+        $('place').hidden = mode !== 'move';
+        $('place').textContent = 'Déplacer';
+        var ok = false;
+        if (mode === 'move' && sel != null && ghost) ok = !checkMove(M, sel, ghost.x, ghost.y);
+        $('place').disabled = !ok;
+        $('hint').hidden = false;
+        $('hint').textContent = mode === 'move' ? 'Un déplacement : 10 au plus autour du joueur' : ms ? 'Obligation de tirer ce tour' : 'Plus vous tirez loin, plus le ballon va loin';
+        statusAim();
+      }
       function enterPhase() {
         refreshHeader();
-        var showPlace = M.phase === 'place';
-        $('undo').hidden = !showPlace; $('place').hidden = !showPlace; $('hint').hidden = showPlace;
-        ghost = null; aim = null;
-        $('place').disabled = true;
+        ghost = null; aim = null; sel = null; dragging = false;
         if (M.phase === 'place') {
+          $('mode').hidden = true;
+          $('undo').hidden = false; $('place').hidden = false; $('hint').hidden = true;
+          $('place').disabled = true;
           var idx = M.queue[0], p = M.players[idx], r = M.restart;
           var left = M.queue.filter(function (k) { return M.players[k].team === p.team; }).length;
           setStatus(nameOf(p.team) + ' place son joueur n°' + p.num + ' (' + left + ' à placer) — ' + KIND_TEXT[r.kind] + ' pour ' + nameOf(r.team) + '.');
           $('place').textContent = 'Placer le n°' + p.num;
           $('undo').textContent = 'Effacer';
         } else if (M.phase === 'aim') {
-          setStatus(nameOf(holderTeam(M)) + ' a le ballon : posez le doigt, tirez en arrière, relâchez.');
-          $('hint').textContent = 'Plus vous tirez loin, plus le ballon va loin';
+          mode = canShoot(M) ? 'shoot' : 'move';
+          updateControls();
         }
         redraw();
       }
@@ -710,6 +848,13 @@
         redraw();
       }
       $('place').addEventListener('click', function () {
+        if (M && M.phase === 'aim' && mode === 'move') {
+          if (sel == null || !ghost) return;
+          var e2 = movePlayer(M, sel, ghost.x, ghost.y);
+          if (e2) { setStatus(e2, true); return; }
+          enterPhase();
+          return;
+        }
         if (!M || M.phase !== 'place' || !ghost) return;
         var err = placePlayer(M, M.queue[0], ghost.x, ghost.y);
         if (err) { setStatus(err, true); return; }
@@ -719,20 +864,55 @@
         } else enterPhase();
       });
       $('undo').addEventListener('click', function () { ghost = null; $('place').disabled = true; redraw(); });
+      $('mode').addEventListener('click', function () {
+        if (!M || M.phase !== 'aim' || anim) return;
+        mode = mode === 'move' ? 'shoot' : 'move';
+        sel = null; ghost = null; aim = null;
+        updateControls(); redraw();
+      });
+
+      // ----- déplacement d'un joueur : toucher le joueur, puis toucher ou glisser vers sa nouvelle place -----
+      function snapGhost(e) {
+        var w = fromScreen(e.clientX, e.clientY), sp = M.players[sel];
+        var dx = w.x - sp.x, dy = w.y - sp.y, d = Math.hypot(dx, dy);
+        if (d > MOVE_R) { dx = dx / d * MOVE_R; dy = dy / d * MOVE_R; }
+        var gx = Math.round((sp.x + dx) * 2) / 2, gy = Math.round((sp.y + dy) * 2) / 2;
+        if (Math.hypot(gx - sp.x, gy - sp.y) > MOVE_R) { gx = sp.x + dx; gy = sp.y + dy; }
+        ghost = Math.hypot(gx - sp.x, gy - sp.y) < 0.6 ? null : { x: gx, y: gy };
+        updateControls();
+        if (ghost) { var err = checkMove(M, sel, ghost.x, ghost.y); if (err) setStatus(err, true); }
+      }
+      function moveDown(e) {
+        var w = fromScreen(e.clientX, e.clientY), best = -1, bd = 3.8;
+        M.players.forEach(function (p, i) {
+          if (p.team !== M.turn) return;
+          var d = Math.hypot(p.x - w.x, p.y - w.y);
+          if (d < bd) { bd = d; best = i; }
+        });
+        if (best >= 0 && best !== sel) { sel = best; ghost = null; dragging = true; updateControls(); }
+        else if (sel != null) { dragging = true; snapGhost(e); }
+        else { setStatus('Touchez d’abord un de vos joueurs.', true); return; }
+        try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+        redraw();
+      }
 
       // ----- visée : poser, tirer en arrière, relâcher -----
       cv.addEventListener('pointerdown', function (e) {
         if (!M) return;
         if (M.phase === 'place') { pointerPlace(e); return; }
         if (M.phase !== 'aim' || anim) return;
+        if (mode === 'move') { moveDown(e); return; }
+        if (!canShoot(M)) return;
         aim = { sx: e.clientX, sy: e.clientY, cx: e.clientX, cy: e.clientY };
         try { cv.setPointerCapture(e.pointerId); } catch (x) {}
         redraw();
       });
       cv.addEventListener('pointermove', function (e) {
         if (aim) { aim.cx = e.clientX; aim.cy = e.clientY; redraw(); }
+        else if (dragging && sel != null && M && M.phase === 'aim' && mode === 'move') { snapGhost(e); redraw(); }
       });
       function endAim(e, cancel) {
+        if (dragging) { dragging = false; redraw(); return; }
         if (!aim) return;
         aim.cx = e.clientX; aim.cy = e.clientY;
         var sh = cancel ? null : aimShot();
@@ -743,6 +923,7 @@
       cv.addEventListener('pointercancel', function (e) { endAim(e, true); });
 
       function shoot(ux, uy, dist) {
+        if (!canShoot(M)) return;
         var si = M.holder, shooterTeam = M.players[si].team;
         var out = resolveShot(M, si, ux, uy, dist);
         var from = { x: M.players[si].x, y: M.players[si].y };
@@ -809,6 +990,14 @@
         }
         show('setup'); renderSetup();
       });
+      var rulesDlg = $('rules');
+      if (typeof rulesDlg.showModal !== 'function') {
+        rulesDlg.showModal = function () { this.setAttribute('open', ''); };
+        rulesDlg.close = function () { this.removeAttribute('open'); };
+      }
+      $('info').addEventListener('click', function () { rulesDlg.showModal(); });
+      $('rulesClose').addEventListener('click', function () { rulesDlg.close(); });
+      rulesDlg.addEventListener('click', function (e) { if (e.target === rulesDlg) rulesDlg.close(); });
       $('go').addEventListener('click', startMatch);
       $('again').addEventListener('click', startMatch);
       $('toSetup').addEventListener('click', function () { show('setup'); renderSetup(); });
@@ -816,7 +1005,7 @@
       // Pour les tests automatiques
       window.__foot = {
         get M() { return M; }, newMatch: newMatch, startRestart: startRestart, checkPlacement: checkPlacement, placePlayer: placePlayer,
-        resolveShot: resolveShot, applyOutcome: applyOutcome, constants: { PW: PW, PH: PH, GX0: GX0, GX1: GX1, CC_R: CC_R, R_CATCH: R_CATCH },
+        resolveShot: resolveShot, applyOutcome: applyOutcome, movePlayer: movePlayer, checkMove: checkMove, mustShoot: mustShoot, canShoot: canShoot, constants: { PW: PW, PH: PH, GX0: GX0, GX1: GX1, CC_R: CC_R, R_CATCH: R_CATCH },
         toScreen: function (x, y) { var r = cv.getBoundingClientRect(); return { x: r.left + (x - 30) * S + W / 2, y: r.top + (y - 45) * S + H / 2 }; },
         get scale() { return S; }
       };
