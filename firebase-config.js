@@ -16,4 +16,9 @@
  * Ces valeurs ne sont pas secrètes : elles désignent le projet. La protection des données vient
  * des règles de sécurité (firestore.rules) et de la connexion, pas de la discrétion de cette configuration.
  */
-window.THY_FIREBASE = null;
+window.THY_FIREBASE = {
+  apiKey: "AIzaSyAjPc7Jr9u9WfMKAne5t9Z0wsA6BQylyF0",
+  authDomain: "thyapp-fcfab.firebaseapp.com",
+  projectId: "thyapp-fcfab",
+  appId: "1:73802745515:web:ba942ecb30ceb4c71319ee"
+};
