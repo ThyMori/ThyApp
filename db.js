@@ -23,7 +23,8 @@
     { id: 'jeu-de-la-vie', label: 'Jeu de la vie' },
     { id: 'course', label: 'Course' },
     { id: 'football', label: 'Football' },
-    { id: 'spectacles', label: 'Spectacles' }
+    { id: 'spectacles', label: 'Spectacles' },
+    { id: 'reserve', label: 'Réservé' }
   ];
   // Partie qui commande l'accès à chaque base (users : réservé aux administrateurs).
   var SECTION_OF = { spectacles: 'spectacles', productions: 'spectacles', personnes: 'spectacles', records: 'course', users: null };
